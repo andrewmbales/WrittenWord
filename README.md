@@ -1,2 +1,2 @@
 # WrittenWord
-Simple bible app with the option of handwritten notes
+iPad Bible study app with handwritten notes using PencilKit
