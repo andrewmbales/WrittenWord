@@ -172,7 +172,7 @@ struct NotesColumn: View {
             } else {
                 List {
                     ForEach(chapterNotes) { note in
-                        NavigationLink(destination: DrawingView(note: note)) {
+                        NavigationLink(destination: FullPageDrawingView(note: note)) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(note.title.isEmpty ? "Untitled" : note.title)
                                     .font(.headline)
@@ -205,7 +205,7 @@ struct NotesColumn: View {
         .sheet(isPresented: $showingNewNote) {
             NavigationStack {
                 if let chapter = chapter {
-                    DrawingView(chapter: chapter)
+                    FullPageDrawingView(chapter: chapter)
                 } else {
                     Text("No chapter selected")
                 }
