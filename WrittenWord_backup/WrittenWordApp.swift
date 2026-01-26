@@ -1,0 +1,220 @@
+//
+//  WrittenWordApp.swift
+//  WrittenWord
+//
+//  Created by Andrew Bales on 1/21/26.
+//
+
+import SwiftUI
+import SwiftData
+
+@main
+struct WrittenWordApp: App {
+    var sharedModelContainer: ModelContainer = {
+        let schema = Schema([
+            Book.self,
+            Chapter.self,
+            Verse.self,
+            Note.self,
+            Item.self
+        ])
+        
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false
+        )
+        
+        do {
+            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+        } catch {
+            fatalError("Could not create ModelContainer: \(error)")
+        }
+    }()
+    
+    var body: some Scene {
+        WindowGroup {
+            MainView()
+                .modelContainer(sharedModelContainer)
+                .task {
+                    await seedDataIfNeeded(container: sharedModelContainer)
+                }
+        }
+    }
+}
+
+@MainActor
+func seedDataIfNeeded(container: ModelContainer) async {
+    @AppStorage("didSeedData") var didSeedData: Bool = false
+    
+    print("Seeding started. didSeedData: \(didSeedData)")
+    
+    let modelContext = container.mainContext
+    do {
+        // Check if any books actually exist in the database
+        let fetch = FetchDescriptor<Book>(predicate: nil)
+        let existing = try modelContext.fetch(fetch)
+        print("Existing books count: \(existing.count)")
+        
+        // Reset seed flag if no books exist but flag says we're seeded
+        if existing.isEmpty && didSeedData {
+            print("Resetting seed flag - no books found but flag was true")
+            didSeedData = false
+        }
+        
+        guard !didSeedData else { 
+            print("Already seeded, skipping")
+            return 
+        }
+
+        let data = try loadBundledJSON(named: "kjv", withExtension: "json")
+        let decoded = try JSONDecoder().decode([DecodableBook].self, from: data)
+        print("Decoded books: \(decoded.count)")
+
+        // Define the canonical order of books in the Bible
+        let otBooks = [
+            "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
+            "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel",
+            "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra",
+            "Nehemiah", "Esther", "Job", "Psalms", "Proverbs",
+            "Ecclesiastes", "Song of Solomon", "Isaiah", "Jeremiah", "Lamentations",
+            "Ezekiel", "Daniel", "Hosea", "Joel", "Amos",
+            "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk",
+            "Zephaniah", "Haggai", "Zechariah", "Malachi"
+        ]
+        
+        let ntBooks = [
+            "Matthew", "Mark", "Luke", "John", "Acts",
+            "Romans", "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians",
+            "Philippians", "Colossians", "1 Thessalonians", "2 Thessalonians", "1 Timothy",
+            "2 Timothy", "Titus", "Philemon", "Hebrews", "James",
+            "1 Peter", "2 Peter", "1 John", "2 John", "3 John",
+            "Jude", "Revelation"
+        ]
+
+        for (index, b) in decoded.enumerated() {
+            print("Seeding book: \(b.name) with \(b.chapters.count) chapters")
+            
+            // Determine the testament based on the book name
+            let test: String
+            if otBooks.contains(b.name) {
+                test = "OT"
+            } else if ntBooks.contains(b.name) {
+                test = "NT"
+            } else {
+                test = b.testament ?? "OT" // Fallback to original testament or OT
+            }
+            
+            // Determine the order based on the canonical order
+            let order: Int
+            if let otIndex = otBooks.firstIndex(of: b.name) {
+                order = otIndex + 1
+            } else if let ntIndex = ntBooks.firstIndex(of: b.name) {
+                order = otBooks.count + ntIndex + 1
+            } else {
+                order = index + 1 // Fallback to the order in the JSON
+            }
+            
+            let book = Book(name: b.name, order: order, testament: test)
+            
+            // Sort chapters by number
+            let sortedChapters = b.chapters.sorted { $0.number < $1.number }
+            for ch in sortedChapters {
+                let chapter = Chapter(number: ch.number)
+                chapter.book = book
+                
+                // Sort verses by number
+                let sortedVerses = ch.verses.sorted { $0.number < $1.number }
+                for v in sortedVerses {
+                    let verse = Verse(number: v.number, text: v.text)
+                    verse.chapter = chapter
+                    chapter.verses.append(verse)
+                }
+                book.chapters.append(chapter)
+            }
+            modelContext.insert(book)
+        }
+        try modelContext.save()
+        print("Seeding complete")
+        didSeedData = true
+        
+        // Force a small delay to ensure UI updates
+        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+    } catch {
+        print("Seeding failed: \(error)")
+    }
+}
+
+func loadBundledJSON(named name: String, withExtension ext: String) throws -> Data {
+    guard let url = Bundle.main.url(forResource: name, withExtension: ext) else {
+        print("Failed to find \(name).\(ext) in bundle")
+        print("Bundle contents: \(Bundle.main.bundlePath)")
+        print("Bundle resources: \(Bundle.main.urls(forResourcesWithExtension: ext, subdirectory: nil) ?? [])")
+        throw NSError(domain: "Seed", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing bundled JSON \(name).\(ext)"])
+    }
+    return try Data(contentsOf: url)
+}
+
+// MARK: - Decoding models matching the bundled JSON
+struct DecodableBook: Decodable {
+    let name: String
+    let abbreviation: String?
+    let testament: String?
+    let chapters: [DecodableChapter]
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case abbreviation
+        case abbr
+        case shortName
+        case testament
+        case chapters
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.name = try container.decode(String.self, forKey: .name)
+        if let abbr = try container.decodeIfPresent(String.self, forKey: .abbreviation) ??
+                      container.decodeIfPresent(String.self, forKey: .abbr) ??
+                      container.decodeIfPresent(String.self, forKey: .shortName) {
+            self.abbreviation = abbr
+        } else {
+            self.abbreviation = nil
+        }
+        self.testament = try container.decodeIfPresent(String.self, forKey: .testament)
+        // Try chapters as array of objects first
+        if let chapterObjects = try? container.decode([DecodableChapter].self, forKey: .chapters) {
+            self.chapters = chapterObjects
+        } else if let chapterArrays = try? container.decode([[DecodableVerse]].self, forKey: .chapters) {
+            // Wrap arrays into chapter objects, using index+1 as chapter number
+            self.chapters = chapterArrays.enumerated().map { (idx, verses) in
+                DecodableChapter(number: idx + 1, verses: verses)
+            }
+        } else if let chapterStringArrays = try? container.decode([[String]].self, forKey: .chapters) {
+            // Verses are plain strings; convert to numbered verses
+            self.chapters = chapterStringArrays.enumerated().map { (cidx, verseStrings) in
+                let verses = verseStrings.enumerated().map { (vidx, text) in
+                    DecodableVerse(number: vidx + 1, text: text)
+                }
+                return DecodableChapter(number: cidx + 1, verses: verses)
+            }
+        } else {
+            throw DecodingError.typeMismatch([DecodableChapter].self, DecodingError.Context(codingPath: container.codingPath + [CodingKeys.chapters], debugDescription: "chapters is neither array of objects, array of arrays of verses, nor array of arrays of strings"))
+        }
+    }
+}
+
+struct DecodableChapter: Decodable {
+    let number: Int
+    let verses: [DecodableVerse]
+
+    init(number: Int, verses: [DecodableVerse]) {
+        self.number = number
+        self.verses = verses
+    }
+}
+
+struct DecodableVerse: Decodable {
+    let number: Int
+    let text: String
+}
+

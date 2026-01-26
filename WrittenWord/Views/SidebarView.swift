@@ -2,7 +2,7 @@
 //  SidebarView.swift
 //  WrittenWord
 //
-//  Enhanced with better visual hierarchy
+//  Enhanced with Phase 2 - Added Search, Bookmarks, and Stats
 //
 import SwiftUI
 import SwiftData
@@ -34,6 +34,19 @@ struct SidebarView: View {
                     }
                 }
                 
+                // Phase 2: Global Search
+                NavigationLink(destination: GlobalSearchView()) {
+                    Label {
+                        Text("Search")
+                            .font(.headline)
+                    } icon: {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.green)
+                    }
+                }
+            }
+            
+            Section("My Study") {
                 NavigationLink(value: SidebarViewType.notebook) {
                     Label {
                         Text("Notebook")
@@ -41,6 +54,41 @@ struct SidebarView: View {
                     } icon: {
                         Image(systemName: "note.text")
                             .foregroundStyle(.orange)
+                    }
+                }
+                
+                // Phase 1: Highlights
+                NavigationLink(destination: HighlightsView()) {
+                    Label {
+                        Text("Highlights")
+                            .font(.headline)
+                    } icon: {
+                        Image(systemName: "highlighter")
+                            .foregroundStyle(.yellow)
+                    }
+                }
+                
+                // Phase 2: Bookmarks
+                NavigationLink(destination: BookmarksView()) {
+                    Label {
+                        Text("Bookmarks")
+                            .font(.headline)
+                    } icon: {
+                        Image(systemName: "bookmark.fill")
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            
+            Section("Insights") {
+                // Phase 2: Highlight Statistics
+                NavigationLink(destination: HighlightStatsView()) {
+                    Label {
+                        Text("Statistics")
+                            .font(.headline)
+                    } icon: {
+                        Image(systemName: "chart.bar.fill")
+                            .foregroundStyle(.purple)
                     }
                 }
             }
@@ -137,6 +185,8 @@ struct SidebarView: View {
         for: Book.self,
         Chapter.self,
         Note.self,
+        Highlight.self,
+        Bookmark.self,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true)
     )
     

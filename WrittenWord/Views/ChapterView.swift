@@ -1,8 +1,8 @@
 //
-//  ChapterView.swift
+//  ChapterView_Enhanced.swift
 //  WrittenWord
 //
-//  Created by Andrew Bales on 1/21/26.
+//  UI Improvements: No dividers, wrapped text, full-page annotations
 //
 import SwiftUI
 import SwiftData
@@ -12,25 +12,64 @@ struct ChapterView: View {
     let chapter: Chapter
     @Environment(\.modelContext) private var modelContext
     @Query private var allNotes: [Note]
+    @Query private var allHighlights: [Highlight]
+    
     @State private var showingDrawing = false
     @State private var selectedVerse: Verse?
-    @State private var showMargins = true
-    @State private var selectedTool: MarginTool = .pen
+    @State private var showAnnotations = true
+    @State private var selectedTool: AnnotationTool = .none
     @State private var selectedColor: Color = .black
     @State private var penWidth: CGFloat = 1.0
-    @State private var canvasViews: [UUID: PKCanvasView] = [:]
+    @State private var canvasView = PKCanvasView()
     @State private var showingColorPicker = false
     @State private var pendingSave = false
+    
+    // Phase 1: Highlighting features
+    @State private var showHighlightMenu = false
+    @State private var selectedText = ""
+    @State private var selectedRange: NSRange?
+    @State private var selectedHighlightColor: HighlightColor = .yellow
+    @State private var searchText = ""
+    
+    // Phase 2: Bookmarks
+    @State private var showingBookmarkSheet = false
+    @State private var verseToBookmark: Verse?
+    
+    // Settings
+    @AppStorage("fontSize") private var fontSize: Double = 16.0
+    @AppStorage("lineSpacing") private var lineSpacing: Double = 6.0
+    @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
+    @AppStorage("fontFamily") private var fontFamily: FontFamily = .system
+    
     let onChapterChange: (Chapter) -> Void
     
-    enum MarginTool: String, CaseIterable {
+    enum AnnotationTool: String, CaseIterable {
+        case none = "none"
         case pen = "pencil"
         case highlighter = "highlighter"
         case eraser = "eraser.fill"
+        case lasso = "lasso"
+        
+        var icon: String { 
+            switch self {
+            case .none: return "none"
+            default: return rawValue
+            }
+        }
     }
     
     var sortedVerses: [Verse] {
         chapter.verses.sorted { $0.number < $1.number }
+    }
+    
+    var filteredVerses: [Verse] {
+        if searchText.isEmpty {
+            return sortedVerses
+        }
+        return sortedVerses.filter { verse in
+            verse.text.localizedCaseInsensitiveContains(searchText) ||
+            "\(verse.number)".contains(searchText)
+        }
     }
     
     var chapterNotes: [Note] {
@@ -45,36 +84,33 @@ struct ChapterView: View {
         }
     }
     
-    func getMarginNote(for verse: Verse) -> Note? {
-        chapterNotes.first { $0.verse?.id == verse.id && $0.isMarginNote }
+    func getChapterDrawing() -> Note? {
+        chapterNotes.first { $0.chapter?.id == chapter.id && $0.verse == nil }
     }
     
-    func getOrCreateMarginNote(for verse: Verse) -> Note {
-        if let existing = getMarginNote(for: verse) {
+    func getOrCreateChapterDrawing() -> Note {
+        if let existing = getChapterDrawing() {
             return existing
         }
         
         let newNote = Note(
-            title: "Margin - \(verse.reference)",
+            title: "Annotations - \(chapter.reference)",
             content: "",
             drawing: PKDrawing(),
-            verseReference: verse.reference,
-            isMarginNote: true,
-            chapter: nil,
-            verse: verse
+            verseReference: chapter.reference,
+            isMarginNote: false,
+            chapter: chapter,
+            verse: nil
         )
         modelContext.insert(newNote)
-        
-        // Mark for background save to prevent UI freezing
         pendingSave = true
-        
         return newNote
     }
     
     private func performBackgroundSave() {
         if pendingSave {
             Task {
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+                try? await Task.sleep(nanoseconds: 500_000_000)
                 try? modelContext.save()
                 pendingSave = false
             }
@@ -92,179 +128,114 @@ struct ChapterView: View {
     }
     
     private var nextChapter: Chapter? {
-        guard let book = chapter.book else { 
-            print("No book found for chapter")
-            return nil 
-        }
+        guard let book = chapter.book else { return nil }
         let chapters = book.chapters.sorted { $0.number < $1.number }
         let currentIndex = chapters.firstIndex(of: chapter) ?? 0
-        print("Current chapter: \(chapter.number), Total chapters: \(chapters.count), Index: \(currentIndex)")
         if currentIndex < chapters.count - 1 {
-            let next = chapters[currentIndex + 1]
-            print("Next chapter found: \(next.book?.name ?? "") \(next.number)")
-            return next
+            return chapters[currentIndex + 1]
         }
-        print("No next chapter available")
         return nil
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Margin toolbar
-            if showMargins {
-                MarginToolbar(
-                    selectedTool: $selectedTool,
-                    selectedColor: $selectedColor,
-                    penWidth: $penWidth,
-                    showingColorPicker: $showingColorPicker
-                )
-                Divider()
-            }
+        ZStack {
+            // Background
+            colorTheme.backgroundColor
+                .ignoresSafeArea()
             
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(sortedVerses) { verse in
-                            HStack(alignment: .top, spacing: 0) {
-                                // Verse number and text
-                                HStack(alignment: .top, spacing: 8) {
-                                    Text("\(verse.number)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .frame(width: 30, alignment: .trailing)
-                                    
-                                    Text(verse.text)
-                                        .font(.body)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                                .frame(maxWidth: showMargins ? .infinity : nil)
-                                .padding(.horizontal)
-                                .padding(.vertical, 8)
-                                .contentShape(Rectangle())
-                                .contextMenu {
-                                    Button {
-                                        selectedVerse = verse
-                                        showingDrawing = true
-                                    } label: {
-                                        Label("Full Page Note", systemImage: "note.text")
-                                    }
+            VStack(spacing: 0) {
+                // Annotation toolbar
+                if showAnnotations {
+                    AnnotationToolbar(
+                        selectedTool: $selectedTool,
+                        selectedColor: $selectedColor,
+                        penWidth: $penWidth,
+                        showingColorPicker: $showingColorPicker
+                    )
+                    Divider()
+                }
+                
+                // Highlight palette (when text is selected)
+                if showHighlightMenu {
+                    HighlightPalette(
+                        selectedColor: $selectedHighlightColor,
+                        onHighlight: { color in
+                            createHighlight(color: color)
+                        },
+                        onDismiss: {
+                            showHighlightMenu = false
+                            selectedRange = nil
+                            selectedText = ""
+                        }
+                    )
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    Divider()
+                }
+                
+                // Main content area with annotation layer
+                ZStack {
+                    // Scrollable verse content
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(filteredVerses) { verse in
+                                    EnhancedVerseRow(
+                                        verse: verse,
+                                        fontSize: fontSize,
+                                        lineSpacing: lineSpacing,
+                                        fontFamily: fontFamily,
+                                        onTextSelected: { range, text in
+                                            selectedVerse = verse
+                                            selectedRange = range
+                                            selectedText = text
+                                            withAnimation(.spring(response: 0.3)) {
+                                                showHighlightMenu = true
+                                            }
+                                        },
+                                        onBookmark: {
+                                            verseToBookmark = verse
+                                            showingBookmarkSheet = true
+                                        }
+                                    )
+                                    .id(verse.id)
+                                    .padding(.vertical, 8)
+                                    .padding(.horizontal)
                                 }
                                 
-                                // Margin area for handwriting
-                                if showMargins {
-                                    MarginCanvas(
-                                        verse: verse,
-                                        note: getOrCreateMarginNote(for: verse),
-                                        selectedTool: selectedTool,
-                                        selectedColor: selectedColor,
-                                        penWidth: penWidth,
-                                        canvasViews: $canvasViews
-                                    )
-                                    .frame(width: 200)
-                                    .background(Color(.systemGray6).opacity(0.3))
+                                // Next chapter button
+                                if let nextChapter = nextChapter, searchText.isEmpty {
+                                    NextChapterButton(chapter: nextChapter, onTap: {
+                                        onChapterChange(nextChapter)
+                                    })
                                 }
                             }
-                            .id(verse.id)
-                            
-                            Divider()
-                        }
-                        
-                        // Add next chapter button at the bottom
-                        if let nextChapter = nextChapter {
-                            VStack {
-                                Divider()
-                                Button(action: {
-                                    print("Next chapter button tapped: \(nextChapter.book?.name ?? "") \(nextChapter.number)")
-                                    onChapterChange(nextChapter)
-                                }) {
-                                    HStack {
-                                        Text("Continue to \(nextChapter.book?.name ?? "") \(nextChapter.number)")
-                                            .font(.headline)
-                                        Image(systemName: "chevron.right")
-                                    }
-                                    .padding()
-                                    .frame(maxWidth: .infinity)
-                                    .background(Color.accentColor.opacity(0.1))
-                                    .cornerRadius(10)
-                                    .padding()
+                            .padding(.vertical)
+                            .onAppear {
+                                if let firstVerse = filteredVerses.first {
+                                    proxy.scrollTo(firstVerse.id, anchor: .top)
                                 }
-                                .buttonStyle(PlainButtonStyle())
-                            }
-                            .id("nextChapterButton")
-                        } else {
-                            // Debug: Show when no next chapter is available
-                            VStack {
-                                Divider()
-                                Text("No next chapter available")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .padding()
                             }
                         }
                     }
-                    .padding(.vertical)
-                    .onAppear {
-                        // Scroll to top when chapter changes
-                        if let firstVerse = sortedVerses.first {
-                            proxy.scrollTo(firstVerse.id, anchor: .top)
-                        }
+                    
+                    // Full-page annotation canvas overlay
+                    if showAnnotations {
+                        FullPageAnnotationCanvas(
+                            note: getOrCreateChapterDrawing(),
+                            selectedTool: selectedTool,
+                            selectedColor: selectedColor,
+                            penWidth: penWidth,
+                            canvasView: $canvasView
+                        )
+                        .allowsHitTesting(selectedTool != .none)
                     }
                 }
             }
         }
         .navigationTitle("\(chapter.book?.name ?? "") \(chapter.number)")
+        .searchable(text: $searchText, prompt: "Search this chapter...")
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                HStack(spacing: 8) {
-                    // Previous/Next chapter navigation
-                    if let previous = previousChapter {
-                        Button {
-                            onChapterChange(previous)
-                        } label: {
-                            Image(systemName: "chevron.left")
-                        }
-                    }
-                    
-                    Menu {
-                        Button {
-                            selectedVerse = nil
-                            showingDrawing = true
-                        } label: {
-                            Label("Full Page Note", systemImage: "note.text.badge.plus")
-                        }
-                        
-                        Divider()
-                        
-                        Button {
-                            withAnimation {
-                                showMargins.toggle()
-                            }
-                        } label: {
-                            Label(showMargins ? "Hide Margins" : "Show Margins",
-                                  systemImage: showMargins ? "sidebar.right" : "sidebar.left")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                    
-                    // Next chapter navigation
-                    if let next = nextChapter {
-                        Button {
-                            onChapterChange(next)
-                        } label: {
-                            Image(systemName: "chevron.right")
-                        }
-                    }
-                }
-            }
-            
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    NotificationCenter.default.post(name: .showNotesColumn, object: nil)
-                } label: {
-                    Image(systemName: "sidebar.right")
-                }
-            }
+            toolbarContent
         }
         .sheet(isPresented: $showingDrawing) {
             NavigationStack {
@@ -278,57 +249,339 @@ struct ChapterView: View {
         .sheet(isPresented: $showingColorPicker) {
             ColorPickerSheet(selectedColor: $selectedColor)
         }
+        .sheet(item: $verseToBookmark) { verse in
+            AddBookmarkSheet(verse: verse)
+        }
         .onAppear {
             performBackgroundSave()
+            // Load existing drawing
+            if let chapterNote = getChapterDrawing() {
+                canvasView.drawing = chapterNote.drawing
+            }
         }
         .onDisappear {
-            // Save any pending changes when leaving the view
+            // Save canvas drawing
+            if let chapterNote = getChapterDrawing() {
+                chapterNote.drawing = canvasView.drawing
+            }
             if pendingSave {
                 try? modelContext.save()
                 pendingSave = false
             }
         }
     }
+    
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarTrailing) {
+            HStack(spacing: 8) {
+                if let previous = previousChapter {
+                    Button {
+                        onChapterChange(previous)
+                    } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                }
+                
+                Menu {
+                    Button {
+                        selectedVerse = nil
+                        showingDrawing = true
+                    } label: {
+                        Label("Full Page Note", systemImage: "note.text.badge.plus")
+                    }
+                    
+                    Button {
+                        // Bookmark entire chapter
+                        let bookmark = Bookmark(
+                            title: "",
+                            chapter: chapter,
+                            category: BookmarkCategory.general.rawValue,
+                            color: BookmarkCategory.general.color
+                        )
+                        modelContext.insert(bookmark)
+                        try? modelContext.save()
+                    } label: {
+                        Label("Bookmark Chapter", systemImage: "bookmark.fill")
+                    }
+                    
+                    Divider()
+                    
+                    Button {
+                        withAnimation {
+                            showAnnotations.toggle()
+                        }
+                    } label: {
+                        Label(
+                            showAnnotations ? "Hide Annotations" : "Show Annotations",
+                            systemImage: showAnnotations ? "pencil.slash" : "pencil"
+                        )
+                    }
+                    
+                    if showAnnotations {
+                        Button(role: .destructive) {
+                            // Clear all annotations
+                            canvasView.drawing = PKDrawing()
+                            if let chapterNote = getChapterDrawing() {
+                                chapterNote.drawing = PKDrawing()
+                                try? modelContext.save()
+                            }
+                        } label: {
+                            Label("Clear Annotations", systemImage: "trash")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                
+                if let next = nextChapter {
+                    Button {
+                        onChapterChange(next)
+                    } label: {
+                        Image(systemName: "chevron.right")
+                    }
+                }
+            }
+        }
+        
+        ToolbarItem(placement: .navigationBarLeading) {
+            Button {
+                NotificationCenter.default.post(name: .showNotesColumn, object: nil)
+            } label: {
+                Image(systemName: "sidebar.right")
+            }
+        }
+    }
+    
+    private func createHighlight(color: HighlightColor) {
+        guard let selectedVerse = selectedVerse,
+              let range = selectedRange else {
+            return
+        }
+        
+        let highlight = Highlight(
+            verseId: selectedVerse.id,
+            startIndex: range.location,
+            endIndex: range.location + range.length,
+            color: color.color,
+            text: selectedText,
+            verse: selectedVerse
+        )
+        
+        modelContext.insert(highlight)
+        try? modelContext.save()
+        
+        // Reset selection
+        showHighlightMenu = false
+        selectedRange = nil
+        selectedText = ""
+    }
 }
 
-struct MarginToolbar: View {
-    @Binding var selectedTool: ChapterView.MarginTool
+// MARK: - Enhanced Verse Row (No Dividers, Full Text Wrapping)
+struct EnhancedVerseRow: View {
+    let verse: Verse
+    let fontSize: Double
+    let lineSpacing: Double
+    let fontFamily: FontFamily
+    let onTextSelected: (NSRange, String) -> Void
+    let onBookmark: () -> Void
+    
+    @Environment(\.modelContext) private var modelContext
+    @Query private var allHighlights: [Highlight]
+    @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
+    
+    var verseHighlights: [Highlight] {
+        allHighlights.filter { $0.verseId == verse.id }
+    }
+    
+    var hasHighlights: Bool {
+        !verseHighlights.isEmpty
+    }
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            // Verse number with indicator
+            VStack(spacing: 4) {
+                Text("\(verse.number)")
+                    .font(.system(size: fontSize * 0.75, design: .rounded))
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32, height: 32)
+                    .background(Color.accentColor.opacity(0.1))
+                    .clipShape(Circle())
+                
+                if hasHighlights {
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .frame(width: 40)
+            
+            // Verse text - FULLY WRAPPED
+            SelectableTextView(
+                text: verse.text,
+                highlights: verseHighlights,
+                fontSize: fontSize,
+                fontFamily: fontFamily,
+                lineSpacing: lineSpacing,
+                selectedRange: .constant(nil),
+                onHighlight: onTextSelected
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .foregroundColor(colorTheme.textColor)
+            .fixedSize(horizontal: false, vertical: true) // ENSURES FULL WRAPPING
+        }
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button {
+                onBookmark()
+            } label: {
+                Label("Bookmark", systemImage: "bookmark")
+            }
+            
+            Button {
+                UIPasteboard.general.string = verse.text
+            } label: {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
+            
+            Button {
+                // Share verse
+            } label: {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+        }
+    }
+}
+
+// MARK: - Full Page Annotation Canvas
+struct FullPageAnnotationCanvas: View {
+    @Bindable var note: Note
+    let selectedTool: ChapterView.AnnotationTool
+    let selectedColor: Color
+    let penWidth: CGFloat
+    @Binding var canvasView: PKCanvasView
+    
+    var body: some View {
+        AnnotationCanvasView(
+            drawing: Binding(
+                get: { note.drawing },
+                set: { newDrawing in
+                    note.drawing = newDrawing
+                }
+            ),
+            selectedTool: selectedTool,
+            selectedColor: selectedColor,
+            penWidth: penWidth,
+            canvasView: $canvasView
+        )
+        .background(Color.clear)
+        .allowsHitTesting(selectedTool != .none)
+    }
+}
+
+struct AnnotationCanvasView: UIViewRepresentable {
+    @Binding var drawing: PKDrawing
+    let selectedTool: ChapterView.AnnotationTool
+    let selectedColor: Color
+    let penWidth: CGFloat
+    @Binding var canvasView: PKCanvasView
+    
+    func makeUIView(context: Context) -> PKCanvasView {
+        canvasView.backgroundColor = .clear
+        canvasView.isOpaque = false
+        canvasView.drawing = drawing
+        canvasView.drawingPolicy = .anyInput
+        canvasView.delegate = context.coordinator
+        canvasView.alwaysBounceVertical = true
+        canvasView.alwaysBounceHorizontal = false
+        updateTool()
+        return canvasView
+    }
+    
+    func updateUIView(_ uiView: PKCanvasView, context: Context) {
+        if uiView.drawing != drawing {
+            uiView.drawing = drawing
+        }
+        updateTool()
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    private func updateTool() {
+        let uiColor = UIColor(selectedColor)
+        
+        switch selectedTool {
+        case .none:
+            // Don't set any tool when none is selected
+            break
+        case .pen:
+            canvasView.tool = PKInkingTool(.pen, color: uiColor, width: penWidth)
+        case .highlighter:
+            canvasView.tool = PKInkingTool(.marker, color: uiColor.withAlphaComponent(0.3), width: penWidth * 3)
+        case .eraser:
+            canvasView.tool = PKEraserTool(.vector)
+        case .lasso:
+            canvasView.tool = PKLassoTool()
+        }
+    }
+    
+    class Coordinator: NSObject, PKCanvasViewDelegate {
+// ...
+        var parent: AnnotationCanvasView
+        
+        init(_ parent: AnnotationCanvasView) {
+            self.parent = parent
+        }
+        
+        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            parent.drawing = canvasView.drawing
+        }
+    }
+}
+
+// MARK: - Annotation Toolbar
+struct AnnotationToolbar: View {
+    @Binding var selectedTool: ChapterView.AnnotationTool
     @Binding var selectedColor: Color
     @Binding var penWidth: CGFloat
     @Binding var showingColorPicker: Bool
     
     let predefinedColors: [Color] = [
         .black, .gray, .red, .orange, .yellow,
-        .green, .blue, .purple
+        .green, .blue, .purple, .brown, .pink
     ]
     
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
                 // Tool selection
-                ForEach(ChapterView.MarginTool.allCases, id: \.self) { tool in
+                ForEach(ChapterView.AnnotationTool.allCases, id: \.self) { tool in
                     Button(action: { selectedTool = tool }) {
-                        Image(systemName: tool.rawValue)
+                        Image(systemName: tool.icon)
                             .font(.title3)
-                            .frame(width: 36, height: 36)
+                            .frame(width: 44, height: 44)
                             .background(selectedTool == tool ? Color.blue.opacity(0.2) : Color.clear)
-                            .cornerRadius(6)
+                            .cornerRadius(8)
                     }
                     .foregroundColor(selectedTool == tool ? .blue : .primary)
                 }
                 
                 Divider()
-                    .frame(height: 30)
+                    .frame(height: 40)
                 
                 // Quick colors
                 ForEach(predefinedColors, id: \.self) { color in
                     Button(action: { selectedColor = color }) {
                         Circle()
                             .fill(color)
-                            .frame(width: 24, height: 24)
+                            .frame(width: 28, height: 28)
                             .overlay(
                                 Circle()
-                                    .stroke(selectedColor == color ? Color.blue : Color.clear, lineWidth: 2)
+                                    .stroke(selectedColor == color ? Color.blue : Color.gray.opacity(0.3), lineWidth: 2)
                             )
                     }
                 }
@@ -342,7 +595,7 @@ struct MarginToolbar: View {
                                     center: .center
                                 )
                             )
-                            .frame(width: 24, height: 24)
+                            .frame(width: 28, height: 28)
                         Image(systemName: "plus")
                             .font(.caption2)
                             .foregroundColor(.white)
@@ -351,107 +604,107 @@ struct MarginToolbar: View {
                 }
                 
                 Divider()
-                    .frame(height: 30)
+                    .frame(height: 40)
                 
-                // Width
-                if selectedTool != .eraser {
-                    HStack(spacing: 4) {
+                // Width slider
+                if selectedTool != .eraser && selectedTool != .lasso {
+                    HStack(spacing: 8) {
                         Image(systemName: "line.diagonal")
-                            .font(.caption2)
-                        Slider(value: $penWidth, in: 1...8)
-                            .frame(width: 80)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        Slider(value: $penWidth, in: 1...12)
+                            .frame(width: 100)
+                            .tint(.blue)
+                        
                         Text("\(Int(penWidth))")
-                            .font(.caption2)
-                            .frame(width: 20)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 25)
                     }
                 }
             }
             .padding(.horizontal)
-            .padding(.vertical, 6)
+            .padding(.vertical, 8)
         }
-        .background(Color(.systemGray6))
+        .background(.ultraThinMaterial)
     }
 }
 
-struct MarginCanvas: View {
-    let verse: Verse
-    @Bindable var note: Note
-    let selectedTool: ChapterView.MarginTool
-    let selectedColor: Color
-    let penWidth: CGFloat
-    @Binding var canvasViews: [UUID: PKCanvasView]
+// MARK: - Supporting Components (Keep from previous version)
+struct HighlightPalette: View {
+    @Binding var selectedColor: HighlightColor
+    let onHighlight: (HighlightColor) -> Void
+    let onDismiss: () -> Void
     
     var body: some View {
-        MarginPencilKitView(
-            drawing: Binding(
-                get: { note.drawing },
-                set: { newDrawing in
-                    note.drawing = newDrawing
+        HStack {
+            Text("Highlight:")
+                .font(.subheadline)
+                .fontWeight(.medium)
+            
+            Spacer()
+            
+            ForEach(HighlightColor.allCases, id: \.self) { color in
+                Button {
+                    selectedColor = color
+                    onHighlight(color)
+                } label: {
+                    Circle()
+                        .fill(color.color)
+                        .frame(width: 32, height: 32)
+                        .overlay(
+                            Circle()
+                                .strokeBorder(Color.primary.opacity(0.2), lineWidth: 1)
+                        )
+                        .overlay(
+                            selectedColor == color ?
+                            Image(systemName: "checkmark")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                            : nil
+                        )
                 }
-            ),
-            selectedTool: selectedTool,
-            selectedColor: selectedColor,
-            penWidth: penWidth,
-            verseId: verse.id,
-            canvasViews: $canvasViews
-        )
-        .frame(minHeight: 60)
+            }
+            
+            Spacer()
+            
+            Button("Cancel") {
+                onDismiss()
+            }
+            .font(.subheadline)
+        }
+        .padding()
+        .background(.ultraThinMaterial)
     }
 }
 
-struct MarginPencilKitView: UIViewRepresentable {
-    @Binding var drawing: PKDrawing
-    let selectedTool: ChapterView.MarginTool
-    let selectedColor: Color
-    let penWidth: CGFloat
-    let verseId: UUID
-    @Binding var canvasViews: [UUID: PKCanvasView]
+struct NextChapterButton: View {
+    let chapter: Chapter
+    let onTap: () -> Void
     
-    func makeUIView(context: Context) -> PKCanvasView {
-        let canvas = PKCanvasView()
-        canvas.backgroundColor = .clear
-        canvas.isOpaque = false
-        canvas.drawing = drawing
-        canvas.drawingPolicy = .anyInput
-        canvas.delegate = context.coordinator
-        canvasViews[verseId] = canvas
-        updateTool(canvas)
-        return canvas
-    }
-    
-    func updateUIView(_ uiView: PKCanvasView, context: Context) {
-        if uiView.drawing != drawing {
-            uiView.drawing = drawing
-        }
-        updateTool(uiView)
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    private func updateTool(_ canvas: PKCanvasView) {
-        let uiColor = UIColor(selectedColor)
-        
-        switch selectedTool {
-        case .pen:
-            canvas.tool = PKInkingTool(.pen, color: uiColor, width: penWidth)
-        case .highlighter:
-            canvas.tool = PKInkingTool(.marker, color: uiColor.withAlphaComponent(0.3), width: penWidth * 2)
-        case .eraser:
-            canvas.tool = PKEraserTool(.vector)
-        }
-    }
-    
-    class Coordinator: NSObject, PKCanvasViewDelegate {
-        var parent: MarginPencilKitView
-        
-        init(_ parent: MarginPencilKitView) {
-            self.parent = parent
-        }
-        
-        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
-            parent.drawing = canvasView.drawing
+    var body: some View {
+        VStack {
+            Divider()
+            Button(action: onTap) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Continue Reading")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("\(chapter.book?.name ?? "") \(chapter.number)")
+                            .font(.headline)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                }
+                .padding()
+                .background(Color.accentColor.opacity(0.1))
+                .cornerRadius(12)
+                .padding()
+            }
+            .buttonStyle(.plain)
         }
     }
 }
@@ -480,28 +733,4 @@ struct ColorPickerSheet: View {
     }
 }
 
-#Preview {
-    do {
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(
-            for: Book.self,
-            Chapter.self,
-            Verse.self,
-            Note.self,
-            configurations: config
-        )
-        
-        let book = Book(name: "Genesis", order: 1, testament: "OT")
-        let chapter = Chapter(number: 1)
-        let verse1 = Verse(number: 1, text: "In the beginning God created the heaven and the earth.", chapter: chapter)
-        let verse2 = Verse(number: 2, text: "The earth was without form and void, and darkness was over the face of the deep. And the Spirit of God was hovering over the face of the waters.", chapter: chapter)
-        chapter.verses = [verse1, verse2]
-        
-        return NavigationStack {
-            ChapterView(chapter: chapter, onChapterChange: { _ in })
-        }
-        .modelContainer(container)
-    } catch {
-        return Text("Failed to create preview: \(error.localizedDescription)")
-    }
-}
+// Keep SelectableTextView from Phase 1

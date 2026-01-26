@@ -16,6 +16,8 @@ struct WrittenWordApp: App {
             Chapter.self,
             Verse.self,
             Note.self,
+            Highlight.self,
+            Bookmark.self,
             Item.self
         ])
         
