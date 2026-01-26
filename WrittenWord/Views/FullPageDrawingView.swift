@@ -139,7 +139,7 @@ struct FullPagePencilKitCanvas: UIViewRepresentable {
         chapter.verses = [verse]
         
         return NavigationStack {
-            ChapterView(chapter: chapter)
+            ChapterView(chapter: chapter, onChapterChange: { _ in })
         }
         .modelContainer(container)
     } catch {

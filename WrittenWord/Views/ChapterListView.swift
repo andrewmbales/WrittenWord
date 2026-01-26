@@ -2,54 +2,108 @@
 //  ChapterListView.swift
 //  WrittenWord
 //
-//  Created by Andrew Bales on 1/21/26.
+//  Enhanced with improved visual design
 //
 import SwiftUI
 import SwiftData
 
 struct ChapterListView: View {
     let book: Book
-    @State private var selectedChapter: Chapter?
+    @Binding var selectedChapter: Chapter?
     
     var sortedChapters: [Chapter] {
         book.chapters.sorted { $0.number < $1.number }
     }
     
     private var columns: [GridItem] {
-        [GridItem(.adaptive(minimum: 60, maximum: 80), spacing: 12)]
+        [GridItem(.adaptive(minimum: 70, maximum: 90), spacing: 16)]
     }
     
     var body: some View {
+        mainContent
+            .navigationTitle(book.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: Chapter.self) { chapter in
+                ChapterView(chapter: chapter, onChapterChange: { _ in })
+            }
+    }
+    
+    @ViewBuilder
+    private var mainContent: some View {
         Group {
             if sortedChapters.isEmpty {
-                ContentUnavailableView(
-                    "No Chapters",
-                    systemImage: "book",
-                    description: Text("This book doesn't have any chapters yet")
-                )
+                emptyStateView
             } else {
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(sortedChapters) { chapter in
-                            NavigationLink(value: chapter) {
-                                Text("\(chapter.number)")
-                                    .font(.headline)
-                                    .frame(width: 50, height: 50)
-                                    .background(selectedChapter?.id == chapter.id ? Color.blue : Color.blue.opacity(0.1))
-                                    .foregroundColor(selectedChapter?.id == chapter.id ? .white : .blue)
-                                    .clipShape(Circle())
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                    }
-                    .padding()
-                }
+                chaptersScrollView
             }
         }
-        .navigationTitle(book.name)
-        .navigationDestination(for: Chapter.self) { chapter in
-            ChapterView(chapter: chapter)
+    }
+    
+    private var emptyStateView: some View {
+        ContentUnavailableView(
+            "No Chapters",
+            systemImage: "book.closed",
+            description: Text("This book doesn't have any chapters yet")
+        )
+    }
+    
+    private var chaptersScrollView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                bookHeaderView
+                Divider()
+                    .padding(.horizontal)
+                chapterGrid
+                    .padding(.horizontal)
+            }
+            .padding(.bottom)
         }
+    }
+    
+    private var bookHeaderView: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(book.name)
+                .font(.largeTitle.bold())
+            Text("\(sortedChapters.count) chapter\(sortedChapters.count == 1 ? "" : "s")")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal)
+        .padding(.top)
+    }
+    
+    private var chapterGrid: some View {
+        LazyVGrid(columns: columns, spacing: 16) {
+            ForEach(sortedChapters) { chapter in
+                NavigationLink(value: chapter) {
+                    ChapterButton(
+                        number: chapter.number,
+                        isSelected: selectedChapter?.id == chapter.id
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+struct ChapterButton: View {
+    let number: Int
+    let isSelected: Bool
+    
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(isSelected ? Color.accentColor : Color.accentColor.opacity(0.1))
+                .shadow(color: isSelected ? Color.accentColor.opacity(0.3) : .clear, radius: 8, y: 4)
+            
+            Text("\(number)")
+                .font(.title2.bold())
+                .foregroundColor(isSelected ? .white : .accentColor)
+        }
+        .frame(width: 70, height: 70)
+        .scaleEffect(isSelected ? 1.05 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }
 }
 
@@ -62,11 +116,13 @@ struct ChapterListView: View {
     )
     
     let book = Book(name: "Genesis", order: 1, testament: "OT")
-    let chapter = Chapter(number: 1, book: book)
-    book.chapters = [chapter]
+    for i in 1...50 {
+        let chapter = Chapter(number: i, book: book)
+        book.chapters.append(chapter)
+    }
     
     return NavigationStack {
-        ChapterListView(book: book)
+        ChapterListView(book: book, selectedChapter: .constant(nil))
     }
     .modelContainer(container)
 }

@@ -20,6 +20,8 @@ struct ChapterView: View {
     @State private var penWidth: CGFloat = 1.0
     @State private var canvasViews: [UUID: PKCanvasView] = [:]
     @State private var showingColorPicker = false
+    @State private var pendingSave = false
+    let onChapterChange: (Chapter) -> Void
     
     enum MarginTool: String, CaseIterable {
         case pen = "pencil"
@@ -62,8 +64,48 @@ struct ChapterView: View {
             verse: verse
         )
         modelContext.insert(newNote)
-        try? modelContext.save()
+        
+        // Mark for background save to prevent UI freezing
+        pendingSave = true
+        
         return newNote
+    }
+    
+    private func performBackgroundSave() {
+        if pendingSave {
+            Task {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+                try? modelContext.save()
+                pendingSave = false
+            }
+        }
+    }
+    
+    private var previousChapter: Chapter? {
+        guard let book = chapter.book else { return nil }
+        let chapters = book.chapters.sorted { $0.number < $1.number }
+        let currentIndex = chapters.firstIndex(of: chapter) ?? 0
+        if currentIndex > 0 {
+            return chapters[currentIndex - 1]
+        }
+        return nil
+    }
+    
+    private var nextChapter: Chapter? {
+        guard let book = chapter.book else { 
+            print("No book found for chapter")
+            return nil 
+        }
+        let chapters = book.chapters.sorted { $0.number < $1.number }
+        let currentIndex = chapters.firstIndex(of: chapter) ?? 0
+        print("Current chapter: \(chapter.number), Total chapters: \(chapters.count), Index: \(currentIndex)")
+        if currentIndex < chapters.count - 1 {
+            let next = chapters[currentIndex + 1]
+            print("Next chapter found: \(next.book?.name ?? "") \(next.number)")
+            return next
+        }
+        print("No next chapter available")
+        return nil
     }
     
     var body: some View {
@@ -126,34 +168,93 @@ struct ChapterView: View {
                             
                             Divider()
                         }
+                        
+                        // Add next chapter button at the bottom
+                        if let nextChapter = nextChapter {
+                            VStack {
+                                Divider()
+                                Button(action: {
+                                    print("Next chapter button tapped: \(nextChapter.book?.name ?? "") \(nextChapter.number)")
+                                    onChapterChange(nextChapter)
+                                }) {
+                                    HStack {
+                                        Text("Continue to \(nextChapter.book?.name ?? "") \(nextChapter.number)")
+                                            .font(.headline)
+                                        Image(systemName: "chevron.right")
+                                    }
+                                    .padding()
+                                    .frame(maxWidth: .infinity)
+                                    .background(Color.accentColor.opacity(0.1))
+                                    .cornerRadius(10)
+                                    .padding()
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                            .id("nextChapterButton")
+                        } else {
+                            // Debug: Show when no next chapter is available
+                            VStack {
+                                Divider()
+                                Text("No next chapter available")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .padding()
+                            }
+                        }
                     }
                     .padding(.vertical)
+                    .onAppear {
+                        // Scroll to top when chapter changes
+                        if let firstVerse = sortedVerses.first {
+                            proxy.scrollTo(firstVerse.id, anchor: .top)
+                        }
+                    }
                 }
             }
         }
         .navigationTitle("\(chapter.book?.name ?? "") \(chapter.number)")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Button {
-                        selectedVerse = nil
-                        showingDrawing = true
-                    } label: {
-                        Label("Full Page Note", systemImage: "note.text.badge.plus")
+                HStack(spacing: 8) {
+                    // Previous/Next chapter navigation
+                    if let previous = previousChapter {
+                        Button {
+                            onChapterChange(previous)
+                        } label: {
+                            Image(systemName: "chevron.left")
+                        }
                     }
                     
-                    Divider()
-                    
-                    Button {
-                        withAnimation {
-                            showMargins.toggle()
+                    Menu {
+                        Button {
+                            selectedVerse = nil
+                            showingDrawing = true
+                        } label: {
+                            Label("Full Page Note", systemImage: "note.text.badge.plus")
+                        }
+                        
+                        Divider()
+                        
+                        Button {
+                            withAnimation {
+                                showMargins.toggle()
+                            }
+                        } label: {
+                            Label(showMargins ? "Hide Margins" : "Show Margins",
+                                  systemImage: showMargins ? "sidebar.right" : "sidebar.left")
                         }
                     } label: {
-                        Label(showMargins ? "Hide Margins" : "Show Margins",
-                              systemImage: showMargins ? "sidebar.right" : "sidebar.left")
+                        Image(systemName: "ellipsis.circle")
                     }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
+                    
+                    // Next chapter navigation
+                    if let next = nextChapter {
+                        Button {
+                            onChapterChange(next)
+                        } label: {
+                            Image(systemName: "chevron.right")
+                        }
+                    }
                 }
             }
             
@@ -176,6 +277,16 @@ struct ChapterView: View {
         }
         .sheet(isPresented: $showingColorPicker) {
             ColorPickerSheet(selectedColor: $selectedColor)
+        }
+        .onAppear {
+            performBackgroundSave()
+        }
+        .onDisappear {
+            // Save any pending changes when leaving the view
+            if pendingSave {
+                try? modelContext.save()
+                pendingSave = false
+            }
         }
     }
 }
@@ -366,5 +477,31 @@ struct ColorPickerSheet: View {
                 }
             }
         }
+    }
+}
+
+#Preview {
+    do {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: Book.self,
+            Chapter.self,
+            Verse.self,
+            Note.self,
+            configurations: config
+        )
+        
+        let book = Book(name: "Genesis", order: 1, testament: "OT")
+        let chapter = Chapter(number: 1)
+        let verse1 = Verse(number: 1, text: "In the beginning God created the heaven and the earth.", chapter: chapter)
+        let verse2 = Verse(number: 2, text: "The earth was without form and void, and darkness was over the face of the deep. And the Spirit of God was hovering over the face of the waters.", chapter: chapter)
+        chapter.verses = [verse1, verse2]
+        
+        return NavigationStack {
+            ChapterView(chapter: chapter, onChapterChange: { _ in })
+        }
+        .modelContainer(container)
+    } catch {
+        return Text("Failed to create preview: \(error.localizedDescription)")
     }
 }

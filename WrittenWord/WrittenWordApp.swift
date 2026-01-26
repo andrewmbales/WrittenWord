@@ -93,7 +93,16 @@ func seedDataIfNeeded(container: ModelContainer) async {
 
         for (index, b) in decoded.enumerated() {
             print("Seeding book: \(b.name) with \(b.chapters.count) chapters")
-            let test = (b.testament?.isEmpty == false) ? b.testament! : "OT"
+            
+            // Determine the testament based on the book name
+            let test: String
+            if otBooks.contains(b.name) {
+                test = "OT"
+            } else if ntBooks.contains(b.name) {
+                test = "NT"
+            } else {
+                test = b.testament ?? "OT" // Fallback to original testament or OT
+            }
             
             // Determine the order based on the canonical order
             let order: Int
