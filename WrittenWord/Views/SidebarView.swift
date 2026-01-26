@@ -14,6 +14,8 @@ struct SidebarView: View {
     
     @State private var selectedView: SidebarSection? = .bible
     @State private var expandedBook: Book?
+    @State private var isOldTestamentExpanded: Bool = false
+    @State private var isNewTestamentExpanded: Bool = false
     
     enum SidebarSection: Hashable {
         case bible, search, notebook, highlights, bookmarks, statistics, settings
@@ -66,15 +68,34 @@ struct SidebarView: View {
     var body: some View {
         List(selection: $selectedView) {
             // Main navigation
-            Section {
+            Section ("Bible"){
+                NavigationLink(destination: GlobalSearchView()) {
+                    Label(SidebarSection.search.title, systemImage: SidebarSection.search.icon)
+                        .foregroundStyle(SidebarSection.search.color)
+                }
+                
                 NavigationLink(value: SidebarSection.bible) {
                     Label(SidebarSection.bible.title, systemImage: SidebarSection.bible.icon)
                         .foregroundStyle(SidebarSection.bible.color)
                 }
                 
-                NavigationLink(destination: GlobalSearchView()) {
-                    Label(SidebarSection.search.title, systemImage: SidebarSection.search.icon)
-                        .foregroundStyle(SidebarSection.search.color)
+                // Bible books with chapters - directly under Bible button
+                DisclosureGroup("Old Testament", isExpanded: $isOldTestamentExpanded) {
+                    BibleBooksSection(
+                        title: "",
+                        books: oldTestamentBooks,
+                        expandedBook: $expandedBook,
+                        selectedChapter: $selectedChapter
+                    )
+                }
+                
+                DisclosureGroup("New Testament", isExpanded: $isNewTestamentExpanded) {
+                    BibleBooksSection(
+                        title: "",
+                        books: newTestamentBooks,
+                        expandedBook: $expandedBook,
+                        selectedChapter: $selectedChapter
+                    )
                 }
             }
             
@@ -102,23 +123,6 @@ struct SidebarView: View {
                     Label(SidebarSection.statistics.title, systemImage: SidebarSection.statistics.icon)
                         .foregroundStyle(SidebarSection.statistics.color)
                 }
-            }
-            
-            // Bible books with chapters
-            if selectedView == .bible {
-                BibleBooksSection(
-                    title: "Old Testament",
-                    books: oldTestamentBooks,
-                    expandedBook: $expandedBook,
-                    selectedChapter: $selectedChapter
-                )
-                
-                BibleBooksSection(
-                    title: "New Testament",
-                    books: newTestamentBooks,
-                    expandedBook: $expandedBook,
-                    selectedChapter: $selectedChapter
-                )
             }
             
             // Settings
@@ -189,8 +193,10 @@ struct BibleBooksSection: View {
                 }
             }
         } header: {
-            Text(title)
-                .font(.subheadline.bold())
+            if !title.isEmpty {
+                Text(title)
+                    .font(.subheadline.bold())
+            }
         }
     }
 }

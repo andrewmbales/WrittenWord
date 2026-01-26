@@ -27,14 +27,11 @@ struct HighlightableVerseView: View {
     
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            // Verse number
+            // Verse number - simplified without circle
             Text("\(verse.number)")
                 .font(.system(size: fontSize * 0.7))
                 .foregroundStyle(.secondary)
-                .padding(6)
-                .background(Color.secondary.opacity(0.1))
-                .clipShape(Circle())
-                .frame(width: 36)
+                .frame(width: 20, alignment: .leading)
             
             // Verse text with highlights
             HighlightedText(
@@ -89,6 +86,8 @@ struct HighlightedText: View {
     var body: some View {
         Text(attributedString)
             .lineSpacing(lineSpacing)
+            .lineLimit(nil) // Allow unlimited lines for wrapping
+            .multilineTextAlignment(.leading)
             .contextMenu {
                 Button {
                     // Handle text selection for highlighting
@@ -118,6 +117,11 @@ struct SelectableTextView: UIViewRepresentable {
         textView.backgroundColor = .clear
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
+        textView.textContainer.widthTracksTextView = true
+        textView.textContainer.heightTracksTextView = false
+        textView.setContentHuggingPriority(.defaultHigh, for: .vertical)
+        textView.setContentCompressionResistancePriority(.defaultHigh, for: .vertical)
+        textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         
         return textView
     }
@@ -147,6 +151,10 @@ struct SelectableTextView: UIViewRepresentable {
         }
         
         uiView.attributedText = attributedText
+        
+        // Force layout to calculate proper size
+        uiView.setNeedsLayout()
+        uiView.layoutIfNeeded()
     }
     
     func makeCoordinator() -> Coordinator {

@@ -300,15 +300,13 @@ struct VerseRow: View {
     
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            // Verse number
+            // Verse number - simplified without circle
             VStack(spacing: 4) {
                 Text("\(verse.number)")
                     .font(.system(size: fontSize * 0.75, design: .rounded))
                     .fontWeight(.medium)
                     .foregroundStyle(.secondary)
-                    .frame(width: 32, height: 32)
-                    .background(Color.accentColor.opacity(0.1))
-                    .clipShape(Circle())
+                    .frame(width: 20, alignment: .leading)
                 
                 if !verseHighlights.isEmpty {
                     Circle()
@@ -316,7 +314,7 @@ struct VerseRow: View {
                         .frame(width: 6, height: 6)
                 }
             }
-            .frame(width: 40)
+            .frame(width: 20)
             
             // Verse text
             SelectableTextView(
