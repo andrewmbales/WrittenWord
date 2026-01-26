@@ -76,6 +76,7 @@ struct ChapterView: View {
                     Divider()
                 }
                 
+                // Verse content with annotation overlay (contained within)
                 chapterContent(vm)
             }
         }
@@ -97,52 +98,135 @@ struct ChapterView: View {
         .sheet(item: $viewModel.verseToBookmark) { verse in
             AddBookmarkSheet(verse: verse)
         }
+        .onAppear {
+            // Load existing drawing
+            let chapterId = viewModel.chapter.id
+            if let chapterNote = try? modelContext.fetch(
+                FetchDescriptor<Note>(
+                    predicate: #Predicate { note in
+                        note.chapter?.id == chapterId && note.verse == nil
+                    }
+                )
+            ).first {
+                viewModel.canvasView.drawing = chapterNote.drawing
+            }
+        }
+        .onDisappear {
+            // Save canvas drawing
+            saveAnnotations(viewModel: vm)
+        }
+    }
+    
+    // Save annotations when leaving the view
+    private func saveAnnotations(viewModel: ChapterViewModel) {
+        let chapterId = viewModel.chapter.id
+        if let chapterNote = try? modelContext.fetch(
+            FetchDescriptor<Note>(
+                predicate: #Predicate { note in
+                    note.chapter?.id == chapterId && note.verse == nil
+                }
+            )
+        ).first {
+            chapterNote.drawing = viewModel.canvasView.drawing
+            try? modelContext.save()
+        }
     }
     
     // MARK: - Chapter Content
     @ViewBuilder
-    private func chapterContent(_ viewModel: ChapterViewModel) -> some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(viewModel.filteredVerses) { verse in
-                        VerseRow(
-                            verse: verse,
-                            fontSize: fontSize,
-                            lineSpacing: lineSpacing,
-                            fontFamily: fontFamily,
-                            colorTheme: colorTheme,
-                            onTextSelected: { range, text in
-                                viewModel.selectTextForHighlight(
-                                    verse: verse,
-                                    range: range,
-                                    text: text
-                                )
-                            },
-                            onBookmark: {
-                                viewModel.verseToBookmark = verse
-                                viewModel.showingBookmarkSheet = true
+    private func chapterContent(_ vm: ChapterViewModel) -> some View {
+        // Overlay annotation canvas ONLY on the scrollable content
+        ZStack {
+            // Base layer: Scrollable verses
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(vm.filteredVerses) { verse in
+                            VerseRow(
+                                verse: verse,
+                                fontSize: fontSize,
+                                lineSpacing: lineSpacing,
+                                fontFamily: fontFamily,
+                                colorTheme: colorTheme,
+                                onTextSelected: { range, text in
+                                    vm.selectTextForHighlight(
+                                        verse: verse,
+                                        range: range,
+                                        text: text
+                                    )
+                                },
+                                onBookmark: {
+                                    vm.verseToBookmark = verse
+                                    vm.showingBookmarkSheet = true
+                                }
+                            )
+                            .id(verse.id)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 20)
+                        }
+                        
+                        if let nextChapter = vm.nextChapter, vm.searchText.isEmpty {
+                            NextChapterButton(chapter: nextChapter) {
+                                onChapterChange(nextChapter)
                             }
-                        )
-                        .id(verse.id)
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 20)
+                        }
                     }
-                    
-                    if let nextChapter = viewModel.nextChapter, viewModel.searchText.isEmpty {
-                        NextChapterButton(chapter: nextChapter) {
-                            onChapterChange(nextChapter)
+                    .padding(.vertical)
+                    .onAppear {
+                        if let firstVerse = vm.filteredVerses.first {
+                            proxy.scrollTo(firstVerse.id, anchor: .top)
                         }
                     }
                 }
-                .padding(.vertical)
-                .onAppear {
-                    if let firstVerse = viewModel.filteredVerses.first {
-                        proxy.scrollTo(firstVerse.id, anchor: .top)
-                    }
+                // Disable scroll interaction when annotating
+                .allowsHitTesting(vm.selectedTool == .none)
+            }
+            
+            // Annotation layer: ONLY over the verse content
+            if vm.showAnnotations {
+                GeometryReader { geometry in
+                    FullPageAnnotationCanvas(
+                        note: getOrCreateChapterDrawing(),
+                        selectedTool: vm.selectedTool,
+                        selectedColor: vm.selectedColor,
+                        penWidth: vm.penWidth,
+                        canvasView: Binding(
+                            get: { viewModel?.canvasView ?? PKCanvasView() },
+                            set: { viewModel?.canvasView = $0 }
+                        )
+                    )
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                 }
             }
         }
+    }
+    
+    // Helper function to get or create chapter drawing
+    private func getOrCreateChapterDrawing() -> Note {
+        // Check for existing chapter note
+        let chapterId = chapter.id
+        let descriptor = FetchDescriptor<Note>(
+            predicate: #Predicate { note in
+                note.chapter?.id == chapterId && note.verse == nil
+            }
+        )
+        
+        if let existing = try? modelContext.fetch(descriptor).first {
+            return existing
+        }
+        
+        // Create new chapter note
+        let newNote = Note(
+            title: "Annotations - \(chapter.reference)",
+            content: "",
+            drawing: PKDrawing(),
+            verseReference: chapter.reference,
+            isMarginNote: false,
+            chapter: chapter,
+            verse: nil
+        )
+        modelContext.insert(newNote)
+        return newNote
     }
     
     // MARK: - Toolbar

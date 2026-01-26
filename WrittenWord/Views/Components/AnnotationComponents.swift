@@ -187,10 +187,14 @@ struct AnnotationCanvasView: UIViewRepresentable {
         canvasView.backgroundColor = .clear
         canvasView.isOpaque = false
         canvasView.drawing = drawing
-        canvasView.drawingPolicy = .anyInput
         canvasView.delegate = context.coordinator
-        canvasView.alwaysBounceVertical = true
+        canvasView.alwaysBounceVertical = false  // Changed to false
         canvasView.alwaysBounceHorizontal = false
+        
+        // Start with drawing disabled
+        canvasView.drawingPolicy = .pencilOnly
+        canvasView.isUserInteractionEnabled = false
+        
         updateTool()
         return canvasView
     }
@@ -200,6 +204,7 @@ struct AnnotationCanvasView: UIViewRepresentable {
             uiView.drawing = drawing
         }
         updateTool()
+        updateInteractionState()
     }
     
     func makeCoordinator() -> Coordinator {
@@ -211,6 +216,7 @@ struct AnnotationCanvasView: UIViewRepresentable {
         
         switch selectedTool {
         case .none:
+            // Explicitly set no tool
             break
         case .pen:
             canvasView.tool = PKInkingTool(.pen, color: uiColor, width: penWidth)
@@ -224,6 +230,17 @@ struct AnnotationCanvasView: UIViewRepresentable {
             canvasView.tool = PKEraserTool(.vector)
         case .lasso:
             canvasView.tool = PKLassoTool()
+        }
+    }
+    
+    private func updateInteractionState() {
+        // Enable/disable based on tool selection
+        if selectedTool == .none {
+            canvasView.isUserInteractionEnabled = false
+            canvasView.drawingPolicy = .pencilOnly
+        } else {
+            canvasView.isUserInteractionEnabled = true
+            canvasView.drawingPolicy = .anyInput  // Allow finger and pencil
         }
     }
     
@@ -260,6 +277,7 @@ struct FullPageAnnotationCanvas: View {
             canvasView: $canvasView
         )
         .background(Color.clear)
+        // Only enable interaction when a tool is selected (not .none)
         .allowsHitTesting(selectedTool != .none)
     }
 }
