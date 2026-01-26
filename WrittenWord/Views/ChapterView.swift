@@ -1,8 +1,8 @@
 //
-//  ChapterView_Enhanced.swift
+//  ChapterView.swift - CORRECTED VERSION
 //  WrittenWord
 //
-//  UI Improvements: No dividers, wrapped text, full-page annotations
+//  Fix: Prevents sliding AND shows verses properly
 //
 import SwiftUI
 import SwiftData
@@ -50,7 +50,7 @@ struct ChapterView: View {
         case eraser = "eraser.fill"
         case lasso = "lasso"
         
-        var icon: String { 
+        var icon: String {
             switch self {
             case .none: return "none"
             default: return rawValue
@@ -138,98 +138,46 @@ struct ChapterView: View {
     }
     
     var body: some View {
-        ZStack {
-            // Background
-            colorTheme.backgroundColor
-                .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Annotation toolbar
-                if showAnnotations {
-                    AnnotationToolbar(
-                        selectedTool: $selectedTool,
-                        selectedColor: $selectedColor,
-                        penWidth: $penWidth,
-                        showingColorPicker: $showingColorPicker
-                    )
-                    Divider()
-                }
+        // FIX: Use GeometryReader but let VStack manage layout naturally
+        GeometryReader { geometry in
+            ZStack(alignment: .topLeading) {
+                // Background
+                colorTheme.backgroundColor
+                    .ignoresSafeArea()
                 
-                // Highlight palette (when text is selected)
-                if showHighlightMenu {
-                    HighlightPalette(
-                        selectedColor: $selectedHighlightColor,
-                        onHighlight: { color in
-                            createHighlight(color: color)
-                        },
-                        onDismiss: {
-                            showHighlightMenu = false
-                            selectedRange = nil
-                            selectedText = ""
-                        }
-                    )
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    Divider()
-                }
-                
-                // Main content area with annotation layer
-                ZStack {
-                    // Scrollable verse content
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 0) {
-                                ForEach(filteredVerses) { verse in
-                                    EnhancedVerseRow(
-                                        verse: verse,
-                                        fontSize: fontSize,
-                                        lineSpacing: lineSpacing,
-                                        fontFamily: fontFamily,
-                                        onTextSelected: { range, text in
-                                            selectedVerse = verse
-                                            selectedRange = range
-                                            selectedText = text
-                                            withAnimation(.spring(response: 0.3)) {
-                                                showHighlightMenu = true
-                                            }
-                                        },
-                                        onBookmark: {
-                                            verseToBookmark = verse
-                                            showingBookmarkSheet = true
-                                        }
-                                    )
-                                    .id(verse.id)
-                                    .padding(.vertical, 8)
-                                    .padding(.horizontal)
-                                }
-                                
-                                // Next chapter button
-                                if let nextChapter = nextChapter, searchText.isEmpty {
-                                    NextChapterButton(chapter: nextChapter, onTap: {
-                                        onChapterChange(nextChapter)
-                                    })
-                                }
-                            }
-                            .padding(.vertical)
-                            .onAppear {
-                                if let firstVerse = filteredVerses.first {
-                                    proxy.scrollTo(firstVerse.id, anchor: .top)
-                                }
-                            }
-                        }
+                VStack(spacing: 0) {
+                    // Annotation toolbar - takes natural height
+                    if showAnnotations {
+                        AnnotationToolbar(
+                            selectedTool: $selectedTool,
+                            selectedColor: $selectedColor,
+                            penWidth: $penWidth,
+                            showingColorPicker: $showingColorPicker
+                        )
+                        Divider()
                     }
                     
-                    // Full-page annotation canvas overlay
-                    if showAnnotations {
-                        FullPageAnnotationCanvas(
-                            note: getOrCreateChapterDrawing(),
-                            selectedTool: selectedTool,
-                            selectedColor: selectedColor,
-                            penWidth: penWidth,
-                            canvasView: $canvasView
+                    // Highlight palette - takes natural height
+                    if showHighlightMenu {
+                        HighlightPalette(
+                            selectedColor: $selectedHighlightColor,
+                            onHighlight: { color in
+                                createHighlight(color: color)
+                            },
+                            onDismiss: {
+                                showHighlightMenu = false
+                                selectedRange = nil
+                                selectedText = ""
+                            }
                         )
-                        .allowsHitTesting(selectedTool != .none)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        Divider()
                     }
+                    
+                    // Main content - fills remaining space
+                    mainContentArea
                 }
+                .frame(width: geometry.size.width, alignment: .topLeading)
             }
         }
         .navigationTitle("\(chapter.book?.name ?? "") \(chapter.number)")
@@ -269,6 +217,70 @@ struct ChapterView: View {
                 pendingSave = false
             }
         }
+    }
+    
+    // FIX: Let content fill available space naturally
+    @ViewBuilder
+    private var mainContentArea: some View {
+        ZStack(alignment: .topLeading) {
+            // Scrollable verse content
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(filteredVerses) { verse in
+                            EnhancedVerseRow(
+                                verse: verse,
+                                fontSize: fontSize,
+                                lineSpacing: lineSpacing,
+                                fontFamily: fontFamily,
+                                onTextSelected: { range, text in
+                                    selectedVerse = verse
+                                    selectedRange = range
+                                    selectedText = text
+                                    withAnimation(.spring(response: 0.3)) {
+                                        showHighlightMenu = true
+                                    }
+                                },
+                                onBookmark: {
+                                    verseToBookmark = verse
+                                    showingBookmarkSheet = true
+                                }
+                            )
+                            .id(verse.id)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal)
+                        }
+                        
+                        // Next chapter button
+                        if let nextChapter = nextChapter, searchText.isEmpty {
+                            NextChapterButton(chapter: nextChapter, onTap: {
+                                onChapterChange(nextChapter)
+                            })
+                        }
+                    }
+                    .padding(.vertical)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .onAppear {
+                        if let firstVerse = filteredVerses.first {
+                            proxy.scrollTo(firstVerse.id, anchor: .top)
+                        }
+                    }
+                }
+            }
+            
+            // Full-page annotation canvas overlay
+            if showAnnotations {
+                FullPageAnnotationCanvas(
+                    note: getOrCreateChapterDrawing(),
+                    selectedTool: selectedTool,
+                    selectedColor: selectedColor,
+                    penWidth: penWidth,
+                    canvasView: $canvasView
+                )
+                .allowsHitTesting(selectedTool != .none)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
     
     @ToolbarContentBuilder
@@ -511,6 +523,7 @@ struct AnnotationCanvasView: UIViewRepresentable {
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
+    
     private func updateTool() {
         let uiColor = UIColor(selectedColor)
         
@@ -530,7 +543,6 @@ struct AnnotationCanvasView: UIViewRepresentable {
     }
     
     class Coordinator: NSObject, PKCanvasViewDelegate {
-// ...
         var parent: AnnotationCanvasView
         
         init(_ parent: AnnotationCanvasView) {
@@ -607,7 +619,7 @@ struct AnnotationToolbar: View {
                     .frame(height: 40)
                 
                 // Width slider
-                if selectedTool != .eraser && selectedTool != .lasso {
+                if selectedTool != .eraser && selectedTool != .lasso && selectedTool != .none {
                     HStack(spacing: 8) {
                         Image(systemName: "line.diagonal")
                             .font(.caption)
@@ -631,7 +643,7 @@ struct AnnotationToolbar: View {
     }
 }
 
-// MARK: - Supporting Components (Keep from previous version)
+// MARK: - Supporting Components
 struct HighlightPalette: View {
     @Binding var selectedColor: HighlightColor
     let onHighlight: (HighlightColor) -> Void
@@ -732,5 +744,3 @@ struct ColorPickerSheet: View {
         }
     }
 }
-
-// Keep SelectableTextView from Phase 1
