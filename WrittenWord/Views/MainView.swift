@@ -1,8 +1,8 @@
 //
-//  MainView.swift - DEFINITIVE FIX
+//  MainView.swift - FIXED
 //  WrittenWord
 //
-//  This version uses multiple strategies to prevent text sliding
+//  Properly constrains detail view to prevent sliding
 //
 import SwiftUI
 import SwiftData
@@ -18,37 +18,26 @@ struct MainView: View {
             SidebarView(selectedChapter: $selectedChapter)
                 .navigationSplitViewColumnWidth(min: 250, ideal: 300, max: 400)
         } detail: {
-            // Detail: Wrapped to ensure proper positioning
-            detailViewWrapper
+            // Detail: Properly constrained to prevent sliding
+            detailContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .navigationSplitViewStyle(.balanced)
     }
     
     @ViewBuilder
-    private var detailViewWrapper: some View {
-        ZStack(alignment: .topLeading) {
-            Color(.systemBackground)
-                .ignoresSafeArea()
-            
-            if let chapter = selectedChapter {
-                ScrollView {
-                    ChapterView(
-                        chapter: chapter,
-                        onChapterChange: { newChapter in
-                            selectedChapter = newChapter
-                        }
-                    )
-                    .id(chapter.id)
-                    .padding(.horizontal, 20)  // Add explicit padding
-                    .padding(.top, 20)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+    private var detailContent: some View {
+        if let chapter = selectedChapter {
+            ChapterView(
+                chapter: chapter,
+                onChapterChange: { newChapter in
+                    selectedChapter = newChapter
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                emptyStateView
-            }
+            )
+            .id(chapter.id)
+        } else {
+            emptyStateView
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     private var emptyStateView: some View {
@@ -57,7 +46,6 @@ struct MainView: View {
             systemImage: "book.pages.fill",
             description: Text("Choose a chapter from the sidebar to begin reading")
         )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

@@ -1,8 +1,8 @@
 //
-//  ChapterView.swift
+//  ChapterView_Enhanced.swift
 //  WrittenWord
 //
-//  Enhanced with Phase 1 improvements
+//  UI Improvements: No dividers, wrapped text, full-page annotations
 //
 import SwiftUI
 import SwiftData
@@ -16,23 +16,22 @@ struct ChapterView: View {
     
     @State private var showingDrawing = false
     @State private var selectedVerse: Verse?
-    @State private var showMargins = true
-    @State private var selectedTool: MarginTool = .pen
+    @State private var showAnnotations = true
+    @State private var selectedTool: AnnotationTool = .none
     @State private var selectedColor: Color = .black
     @State private var penWidth: CGFloat = 1.0
-    @State private var canvasViews: [UUID: PKCanvasView] = [:]
+    @State private var canvasView = PKCanvasView()
     @State private var showingColorPicker = false
     @State private var pendingSave = false
     
-    // Phase 1: New highlighting features
+    // Phase 1: Highlighting features
     @State private var showHighlightMenu = false
     @State private var selectedText = ""
     @State private var selectedRange: NSRange?
     @State private var selectedHighlightColor: HighlightColor = .yellow
     @State private var searchText = ""
-    @State private var showingHighlightPalette = false
-
-    // Phase 2: Bookmark creation
+    
+    // Phase 2: Bookmarks
     @State private var showingBookmarkSheet = false
     @State private var verseToBookmark: Verse?
     
@@ -44,10 +43,19 @@ struct ChapterView: View {
     
     let onChapterChange: (Chapter) -> Void
     
-    enum MarginTool: String, CaseIterable {
+    enum AnnotationTool: String, CaseIterable {
+        case none = "none"
         case pen = "pencil"
         case highlighter = "highlighter"
         case eraser = "eraser.fill"
+        case lasso = "lasso"
+        
+        var icon: String { 
+            switch self {
+            case .none: return "none"
+            default: return rawValue
+            }
+        }
     }
     
     var sortedVerses: [Verse] {
@@ -76,23 +84,23 @@ struct ChapterView: View {
         }
     }
     
-    func getMarginNote(for verse: Verse) -> Note? {
-        chapterNotes.first { $0.verse?.id == verse.id && $0.isMarginNote }
+    func getChapterDrawing() -> Note? {
+        chapterNotes.first { $0.chapter?.id == chapter.id && $0.verse == nil }
     }
     
-    func getOrCreateMarginNote(for verse: Verse) -> Note {
-        if let existing = getMarginNote(for: verse) {
+    func getOrCreateChapterDrawing() -> Note {
+        if let existing = getChapterDrawing() {
             return existing
         }
         
         let newNote = Note(
-            title: "Margin - \(verse.reference)",
+            title: "Annotations - \(chapter.reference)",
             content: "",
             drawing: PKDrawing(),
-            verseReference: verse.reference,
-            isMarginNote: true,
-            chapter: nil,
-            verse: verse
+            verseReference: chapter.reference,
+            isMarginNote: false,
+            chapter: chapter,
+            verse: nil
         )
         modelContext.insert(newNote)
         pendingSave = true
@@ -130,48 +138,52 @@ struct ChapterView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Margin toolbar
-            if showMargins {
-                MarginToolbar(
-                    selectedTool: $selectedTool,
-                    selectedColor: $selectedColor,
-                    penWidth: $penWidth,
-                    showingColorPicker: $showingColorPicker
-                )
-                Divider()
-            }
+        ZStack {
+            // Background
+            colorTheme.backgroundColor
+                .ignoresSafeArea()
             
-            // Highlight palette (when text is selected)
-            if showHighlightMenu {
-                HighlightPalette(
-                    selectedColor: $selectedHighlightColor,
-                    onHighlight: { color in
-                        createHighlight(color: color)
-                    },
-                    onDismiss: {
-                        showHighlightMenu = false
-                        selectedRange = nil
-                        selectedText = ""
-                    }
-                )
-                .transition(.move(edge: .top).combined(with: .opacity))
-                Divider()
-            }
-            
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(filteredVerses) { verse in
-                            VStack(spacing: 0) {
-                                HStack(alignment: .top, spacing: 0) {
-                                    // Enhanced verse display
+            VStack(spacing: 0) {
+                // Annotation toolbar
+                if showAnnotations {
+                    AnnotationToolbar(
+                        selectedTool: $selectedTool,
+                        selectedColor: $selectedColor,
+                        penWidth: $penWidth,
+                        showingColorPicker: $showingColorPicker
+                    )
+                    Divider()
+                }
+                
+                // Highlight palette (when text is selected)
+                if showHighlightMenu {
+                    HighlightPalette(
+                        selectedColor: $selectedHighlightColor,
+                        onHighlight: { color in
+                            createHighlight(color: color)
+                        },
+                        onDismiss: {
+                            showHighlightMenu = false
+                            selectedRange = nil
+                            selectedText = ""
+                        }
+                    )
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    Divider()
+                }
+                
+                // Main content area with annotation layer
+                ZStack {
+                    // Scrollable verse content
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(filteredVerses) { verse in
                                     EnhancedVerseRow(
                                         verse: verse,
                                         fontSize: fontSize,
                                         lineSpacing: lineSpacing,
                                         fontFamily: fontFamily,
-                                        showMargins: showMargins,
                                         onTextSelected: { range, text in
                                             selectedVerse = verse
                                             selectedRange = range
@@ -180,54 +192,46 @@ struct ChapterView: View {
                                                 showHighlightMenu = true
                                             }
                                         },
-                                        onAddNote: { verse in
-                                            selectedVerse = verse
-                                            showingDrawing = true
-                                        },
-                                        onBookmark: { verse in
+                                        onBookmark: {
                                             verseToBookmark = verse
                                             showingBookmarkSheet = true
                                         }
                                     )
-
-                                    
-                                    // Margin area
-                                    if showMargins {
-                                        MarginCanvas(
-                                            verse: verse,
-                                            note: getOrCreateMarginNote(for: verse),
-                                            selectedTool: selectedTool,
-                                            selectedColor: selectedColor,
-                                            penWidth: penWidth,
-                                            canvasViews: $canvasViews
-                                        )
-                                        .frame(width: 200)
-                                        .background(Color(.systemGray6).opacity(0.3))
-                                    }
+                                    .id(verse.id)
+                                    .padding(.vertical, 8)
+                                    .padding(.horizontal)
                                 }
-                                .id(verse.id)
                                 
-                                Divider()
+                                // Next chapter button
+                                if let nextChapter = nextChapter, searchText.isEmpty {
+                                    NextChapterButton(chapter: nextChapter, onTap: {
+                                        onChapterChange(nextChapter)
+                                    })
+                                }
+                            }
+                            .padding(.vertical)
+                            .onAppear {
+                                if let firstVerse = filteredVerses.first {
+                                    proxy.scrollTo(firstVerse.id, anchor: .top)
+                                }
                             }
                         }
-                        
-                        // Next chapter button
-                        if let nextChapter = nextChapter, searchText.isEmpty {
-                            NextChapterButton(chapter: nextChapter, onTap: {
-                                onChapterChange(nextChapter)
-                            })
-                        }
                     }
-                    .padding(.vertical)
-                    .onAppear {
-                        if let firstVerse = filteredVerses.first {
-                            proxy.scrollTo(firstVerse.id, anchor: .top)
-                        }
+                    
+                    // Full-page annotation canvas overlay
+                    if showAnnotations {
+                        FullPageAnnotationCanvas(
+                            note: getOrCreateChapterDrawing(),
+                            selectedTool: selectedTool,
+                            selectedColor: selectedColor,
+                            penWidth: penWidth,
+                            canvasView: $canvasView
+                        )
+                        .allowsHitTesting(selectedTool != .none)
                     }
                 }
             }
         }
-        .background(colorTheme.backgroundColor)
         .navigationTitle("\(chapter.book?.name ?? "") \(chapter.number)")
         .searchable(text: $searchText, prompt: "Search this chapter...")
         .toolbar {
@@ -242,21 +246,24 @@ struct ChapterView: View {
                 }
             }
         }
-        .sheet(item: $verseToBookmark) { verse in
-    AddBookmarkSheet(verse: verse)
-}
         .sheet(isPresented: $showingColorPicker) {
             ColorPickerSheet(selectedColor: $selectedColor)
         }
-        .sheet(isPresented: $showingBookmarkSheet) {
-            if let verse = verseToBookmark {
-                AddBookmarkSheet(verse: verse)
-            }
+        .sheet(item: $verseToBookmark) { verse in
+            AddBookmarkSheet(verse: verse)
         }
         .onAppear {
             performBackgroundSave()
+            // Load existing drawing
+            if let chapterNote = getChapterDrawing() {
+                canvasView.drawing = chapterNote.drawing
+            }
         }
         .onDisappear {
+            // Save canvas drawing
+            if let chapterNote = getChapterDrawing() {
+                chapterNote.drawing = canvasView.drawing
+            }
             if pendingSave {
                 try? modelContext.save()
                 pendingSave = false
@@ -285,15 +292,7 @@ struct ChapterView: View {
                     }
                     
                     Button {
-                        withAnimation {
-                            showingHighlightPalette.toggle()
-                        }
-                    } label: {
-                        Label("Highlight", systemImage: "highlighter")
-                    }
-                    
-                    Divider()
-                    Button {
+                        // Bookmark entire chapter
                         let bookmark = Bookmark(
                             title: "",
                             chapter: chapter,
@@ -310,13 +309,27 @@ struct ChapterView: View {
                     
                     Button {
                         withAnimation {
-                            showMargins.toggle()
+                            showAnnotations.toggle()
                         }
                     } label: {
-                        Label(showMargins ? "Hide Margins" : "Show Margins",
-                              systemImage: showMargins ? "sidebar.right" : "sidebar.left")
+                        Label(
+                            showAnnotations ? "Hide Annotations" : "Show Annotations",
+                            systemImage: showAnnotations ? "pencil.slash" : "pencil"
+                        )
                     }
                     
+                    if showAnnotations {
+                        Button(role: .destructive) {
+                            // Clear all annotations
+                            canvasView.drawing = PKDrawing()
+                            if let chapterNote = getChapterDrawing() {
+                                chapterNote.drawing = PKDrawing()
+                                try? modelContext.save()
+                            }
+                        } label: {
+                            Label("Clear Annotations", systemImage: "trash")
+                        }
+                    }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -365,16 +378,14 @@ struct ChapterView: View {
     }
 }
 
-// MARK: - Enhanced Verse Row
+// MARK: - Enhanced Verse Row (No Dividers, Full Text Wrapping)
 struct EnhancedVerseRow: View {
     let verse: Verse
     let fontSize: Double
     let lineSpacing: Double
     let fontFamily: FontFamily
-    let showMargins: Bool
     let onTextSelected: (NSRange, String) -> Void
-    let onAddNote: (Verse) -> Void
-    let onBookmark: (Verse) -> Void
+    let onBookmark: () -> Void
     
     @Environment(\.modelContext) private var modelContext
     @Query private var allHighlights: [Highlight]
@@ -408,7 +419,7 @@ struct EnhancedVerseRow: View {
             }
             .frame(width: 40)
             
-            // Verse text
+            // Verse text - FULLY WRAPPED
             SelectableTextView(
                 text: verse.text,
                 highlights: verseHighlights,
@@ -418,20 +429,14 @@ struct EnhancedVerseRow: View {
                 selectedRange: .constant(nil),
                 onHighlight: onTextSelected
             )
-            .frame(maxWidth: showMargins ? .infinity : nil)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .foregroundColor(colorTheme.textColor)
+            .fixedSize(horizontal: false, vertical: true) // ENSURES FULL WRAPPING
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .contentShape(Rectangle())
         .contextMenu {
             Button {
-                onAddNote(verse)
-            } label: {
-                Label("Add Note", systemImage: "note.text")
-            }
-            
-            Button {
-                onBookmark(verse)
+                onBookmark()
             } label: {
                 Label("Bookmark", systemImage: "bookmark")
             }
@@ -451,7 +456,182 @@ struct EnhancedVerseRow: View {
     }
 }
 
-// MARK: - Highlight Palette
+// MARK: - Full Page Annotation Canvas
+struct FullPageAnnotationCanvas: View {
+    @Bindable var note: Note
+    let selectedTool: ChapterView.AnnotationTool
+    let selectedColor: Color
+    let penWidth: CGFloat
+    @Binding var canvasView: PKCanvasView
+    
+    var body: some View {
+        AnnotationCanvasView(
+            drawing: Binding(
+                get: { note.drawing },
+                set: { newDrawing in
+                    note.drawing = newDrawing
+                }
+            ),
+            selectedTool: selectedTool,
+            selectedColor: selectedColor,
+            penWidth: penWidth,
+            canvasView: $canvasView
+        )
+        .background(Color.clear)
+        .allowsHitTesting(selectedTool != .none)
+    }
+}
+
+struct AnnotationCanvasView: UIViewRepresentable {
+    @Binding var drawing: PKDrawing
+    let selectedTool: ChapterView.AnnotationTool
+    let selectedColor: Color
+    let penWidth: CGFloat
+    @Binding var canvasView: PKCanvasView
+    
+    func makeUIView(context: Context) -> PKCanvasView {
+        canvasView.backgroundColor = .clear
+        canvasView.isOpaque = false
+        canvasView.drawing = drawing
+        canvasView.drawingPolicy = .anyInput
+        canvasView.delegate = context.coordinator
+        canvasView.alwaysBounceVertical = true
+        canvasView.alwaysBounceHorizontal = false
+        updateTool()
+        return canvasView
+    }
+    
+    func updateUIView(_ uiView: PKCanvasView, context: Context) {
+        if uiView.drawing != drawing {
+            uiView.drawing = drawing
+        }
+        updateTool()
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    private func updateTool() {
+        let uiColor = UIColor(selectedColor)
+        
+        switch selectedTool {
+        case .none:
+            // Don't set any tool when none is selected
+            break
+        case .pen:
+            canvasView.tool = PKInkingTool(.pen, color: uiColor, width: penWidth)
+        case .highlighter:
+            canvasView.tool = PKInkingTool(.marker, color: uiColor.withAlphaComponent(0.3), width: penWidth * 3)
+        case .eraser:
+            canvasView.tool = PKEraserTool(.vector)
+        case .lasso:
+            canvasView.tool = PKLassoTool()
+        }
+    }
+    
+    class Coordinator: NSObject, PKCanvasViewDelegate {
+// ...
+        var parent: AnnotationCanvasView
+        
+        init(_ parent: AnnotationCanvasView) {
+            self.parent = parent
+        }
+        
+        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            parent.drawing = canvasView.drawing
+        }
+    }
+}
+
+// MARK: - Annotation Toolbar
+struct AnnotationToolbar: View {
+    @Binding var selectedTool: ChapterView.AnnotationTool
+    @Binding var selectedColor: Color
+    @Binding var penWidth: CGFloat
+    @Binding var showingColorPicker: Bool
+    
+    let predefinedColors: [Color] = [
+        .black, .gray, .red, .orange, .yellow,
+        .green, .blue, .purple, .brown, .pink
+    ]
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 16) {
+                // Tool selection
+                ForEach(ChapterView.AnnotationTool.allCases, id: \.self) { tool in
+                    Button(action: { selectedTool = tool }) {
+                        Image(systemName: tool.icon)
+                            .font(.title3)
+                            .frame(width: 44, height: 44)
+                            .background(selectedTool == tool ? Color.blue.opacity(0.2) : Color.clear)
+                            .cornerRadius(8)
+                    }
+                    .foregroundColor(selectedTool == tool ? .blue : .primary)
+                }
+                
+                Divider()
+                    .frame(height: 40)
+                
+                // Quick colors
+                ForEach(predefinedColors, id: \.self) { color in
+                    Button(action: { selectedColor = color }) {
+                        Circle()
+                            .fill(color)
+                            .frame(width: 28, height: 28)
+                            .overlay(
+                                Circle()
+                                    .stroke(selectedColor == color ? Color.blue : Color.gray.opacity(0.3), lineWidth: 2)
+                            )
+                    }
+                }
+                
+                Button(action: { showingColorPicker = true }) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                AngularGradient(
+                                    gradient: Gradient(colors: [.red, .yellow, .green, .blue, .purple, .red]),
+                                    center: .center
+                                )
+                            )
+                            .frame(width: 28, height: 28)
+                        Image(systemName: "plus")
+                            .font(.caption2)
+                            .foregroundColor(.white)
+                            .fontWeight(.bold)
+                    }
+                }
+                
+                Divider()
+                    .frame(height: 40)
+                
+                // Width slider
+                if selectedTool != .eraser && selectedTool != .lasso {
+                    HStack(spacing: 8) {
+                        Image(systemName: "line.diagonal")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        Slider(value: $penWidth, in: 1...12)
+                            .frame(width: 100)
+                            .tint(.blue)
+                        
+                        Text("\(Int(penWidth))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 25)
+                    }
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+        .background(.ultraThinMaterial)
+    }
+}
+
+// MARK: - Supporting Components (Keep from previous version)
 struct HighlightPalette: View {
     @Binding var selectedColor: HighlightColor
     let onHighlight: (HighlightColor) -> Void
@@ -500,7 +680,6 @@ struct HighlightPalette: View {
     }
 }
 
-// MARK: - Next Chapter Button
 struct NextChapterButton: View {
     let chapter: Chapter
     let onTap: () -> Void
@@ -530,167 +709,6 @@ struct NextChapterButton: View {
     }
 }
 
-// MARK: - Supporting Views (MarginToolbar, MarginCanvas, ColorPickerSheet remain the same)
-struct MarginToolbar: View {
-    @Binding var selectedTool: ChapterView.MarginTool
-    @Binding var selectedColor: Color
-    @Binding var penWidth: CGFloat
-    @Binding var showingColorPicker: Bool
-    
-    let predefinedColors: [Color] = [
-        .black, .gray, .red, .orange, .yellow,
-        .green, .blue, .purple
-    ]
-    
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 16) {
-                ForEach(ChapterView.MarginTool.allCases, id: \.self) { tool in
-                    Button(action: { selectedTool = tool }) {
-                        Image(systemName: tool.rawValue)
-                            .font(.title3)
-                            .frame(width: 36, height: 36)
-                            .background(selectedTool == tool ? Color.blue.opacity(0.2) : Color.clear)
-                            .cornerRadius(6)
-                    }
-                    .foregroundColor(selectedTool == tool ? .blue : .primary)
-                }
-                
-                Divider().frame(height: 30)
-                
-                ForEach(predefinedColors, id: \.self) { color in
-                    Button(action: { selectedColor = color }) {
-                        Circle()
-                            .fill(color)
-                            .frame(width: 24, height: 24)
-                            .overlay(
-                                Circle()
-                                    .stroke(selectedColor == color ? Color.blue : Color.clear, lineWidth: 2)
-                            )
-                    }
-                }
-                
-                Button(action: { showingColorPicker = true }) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                AngularGradient(
-                                    gradient: Gradient(colors: [.red, .yellow, .green, .blue, .purple, .red]),
-                                    center: .center
-                                )
-                            )
-                            .frame(width: 24, height: 24)
-                        Image(systemName: "plus")
-                            .font(.caption2)
-                            .foregroundColor(.white)
-                            .fontWeight(.bold)
-                    }
-                }
-                
-                Divider().frame(height: 30)
-                
-                if selectedTool != .eraser {
-                    HStack(spacing: 4) {
-                        Image(systemName: "line.diagonal")
-                            .font(.caption2)
-                        Slider(value: $penWidth, in: 1...8)
-                            .frame(width: 80)
-                        Text("\(Int(penWidth))")
-                            .font(.caption2)
-                            .frame(width: 20)
-                    }
-                }
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 6)
-        }
-        .background(Color(.systemGray6))
-    }
-}
-
-struct MarginCanvas: View {
-    let verse: Verse
-    @Bindable var note: Note
-    let selectedTool: ChapterView.MarginTool
-    let selectedColor: Color
-    let penWidth: CGFloat
-    @Binding var canvasViews: [UUID: PKCanvasView]
-    
-    var body: some View {
-        MarginPencilKitView(
-            drawing: Binding(
-                get: { note.drawing },
-                set: { newDrawing in
-                    note.drawing = newDrawing
-                }
-            ),
-            selectedTool: selectedTool,
-            selectedColor: selectedColor,
-            penWidth: penWidth,
-            verseId: verse.id,
-            canvasViews: $canvasViews
-        )
-        .frame(minHeight: 60)
-    }
-}
-
-struct MarginPencilKitView: UIViewRepresentable {
-    @Binding var drawing: PKDrawing
-    let selectedTool: ChapterView.MarginTool
-    let selectedColor: Color
-    let penWidth: CGFloat
-    let verseId: UUID
-    @Binding var canvasViews: [UUID: PKCanvasView]
-    
-    func makeUIView(context: Context) -> PKCanvasView {
-        let canvas = PKCanvasView()
-        canvas.backgroundColor = .clear
-        canvas.isOpaque = false
-        canvas.drawing = drawing
-        canvas.drawingPolicy = .anyInput
-        canvas.delegate = context.coordinator
-        canvasViews[verseId] = canvas
-        updateTool(canvas)
-        return canvas
-    }
-    
-    func updateUIView(_ uiView: PKCanvasView, context: Context) {
-        if uiView.drawing != drawing {
-            uiView.drawing = drawing
-        }
-        updateTool(uiView)
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    private func updateTool(_ canvas: PKCanvasView) {
-        let uiColor = UIColor(selectedColor)
-        
-        switch selectedTool {
-        case .pen:
-            canvas.tool = PKInkingTool(.pen, color: uiColor, width: penWidth)
-        case .highlighter:
-            canvas.tool = PKInkingTool(.marker, color: uiColor.withAlphaComponent(0.3), width: penWidth * 2)
-        case .eraser:
-            canvas.tool = PKEraserTool(.vector)
-        }
-    }
-    
-    class Coordinator: NSObject, PKCanvasViewDelegate {
-        var parent: MarginPencilKitView
-        
-        init(_ parent: MarginPencilKitView) {
-            self.parent = parent
-        }
-        
-        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
-            parent.drawing = canvasView.drawing
-        }
-    }
-}
-
 struct ColorPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var selectedColor: Color
@@ -714,3 +732,5 @@ struct ColorPickerSheet: View {
         }
     }
 }
+
+// Keep SelectableTextView from Phase 1

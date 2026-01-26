@@ -1,8 +1,8 @@
 //
-//  ChapterView.swift - CORRECTED VERSION
+//  ChapterView.swift - SIMPLE APPROACH
 //  WrittenWord
 //
-//  Fix: Prevents sliding AND shows verses properly
+//  Let parent (MainView) handle positioning, ChapterView just fills space
 //
 import SwiftUI
 import SwiftData
@@ -50,7 +50,7 @@ struct ChapterView: View {
         case eraser = "eraser.fill"
         case lasso = "lasso"
         
-        var icon: String {
+        var icon: String { 
             switch self {
             case .none: return "none"
             default: return rawValue
@@ -138,48 +138,102 @@ struct ChapterView: View {
     }
     
     var body: some View {
-        // FIX: Use GeometryReader but let VStack manage layout naturally
-        GeometryReader { geometry in
-            ZStack(alignment: .topLeading) {
-                // Background
-                colorTheme.backgroundColor
-                    .ignoresSafeArea()
-                
-                VStack(spacing: 0) {
-                    // Annotation toolbar - takes natural height
-                    if showAnnotations {
-                        AnnotationToolbar(
-                            selectedTool: $selectedTool,
-                            selectedColor: $selectedColor,
-                            penWidth: $penWidth,
-                            showingColorPicker: $showingColorPicker
-                        )
-                        Divider()
-                    }
-                    
-                    // Highlight palette - takes natural height
-                    if showHighlightMenu {
-                        HighlightPalette(
-                            selectedColor: $selectedHighlightColor,
-                            onHighlight: { color in
-                                createHighlight(color: color)
-                            },
-                            onDismiss: {
-                                showHighlightMenu = false
-                                selectedRange = nil
-                                selectedText = ""
-                            }
-                        )
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                        Divider()
-                    }
-                    
-                    // Main content - fills remaining space
-                    mainContentArea
+        ZStack {
+            // Background
+            colorTheme.backgroundColor
+                .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Annotation toolbar
+                if showAnnotations {
+                    AnnotationToolbar(
+                        selectedTool: $selectedTool,
+                        selectedColor: $selectedColor,
+                        penWidth: $penWidth,
+                        showingColorPicker: $showingColorPicker
+                    )
+                    Divider()
                 }
-                .frame(width: geometry.size.width, alignment: .topLeading)
+                
+                // Highlight palette (when text is selected)
+                if showHighlightMenu {
+                    HighlightPalette(
+                        selectedColor: $selectedHighlightColor,
+                        onHighlight: { color in
+                            createHighlight(color: color)
+                        },
+                        onDismiss: {
+                            showHighlightMenu = false
+                            selectedRange = nil
+                            selectedText = ""
+                        }
+                    )
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    Divider()
+                }
+                
+                // Main content area with annotation layer
+                ZStack {
+                    // Scrollable verse content
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(filteredVerses) { verse in
+                                    EnhancedVerseRow(
+                                        verse: verse,
+                                        fontSize: fontSize,
+                                        lineSpacing: lineSpacing,
+                                        fontFamily: fontFamily,
+                                        onTextSelected: { range, text in
+                                            selectedVerse = verse
+                                            selectedRange = range
+                                            selectedText = text
+                                            withAnimation(.spring(response: 0.3)) {
+                                                showHighlightMenu = true
+                                            }
+                                        },
+                                        onBookmark: {
+                                            verseToBookmark = verse
+                                            showingBookmarkSheet = true
+                                        }
+                                    )
+                                    .id(verse.id)
+                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 20)
+                                }
+                                
+                                // Next chapter button
+                                if let nextChapter = nextChapter, searchText.isEmpty {
+                                    NextChapterButton(chapter: nextChapter, onTap: {
+                                        onChapterChange(nextChapter)
+                                    })
+                                }
+                            }
+                            .padding(.vertical)
+                            .onAppear {
+                                if let firstVerse = filteredVerses.first {
+                                    proxy.scrollTo(firstVerse.id, anchor: .top)
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Full-page annotation canvas overlay
+                    if showAnnotations {
+                        FullPageAnnotationCanvas(
+                            note: getOrCreateChapterDrawing(),
+                            selectedTool: selectedTool,
+                            selectedColor: selectedColor,
+                            penWidth: penWidth,
+                            canvasView: $canvasView
+                        )
+                        .allowsHitTesting(selectedTool != .none)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)  // Fill all available space
         .navigationTitle("\(chapter.book?.name ?? "") \(chapter.number)")
         .searchable(text: $searchText, prompt: "Search this chapter...")
         .toolbar {
@@ -217,70 +271,6 @@ struct ChapterView: View {
                 pendingSave = false
             }
         }
-    }
-    
-    // FIX: Let content fill available space naturally
-    @ViewBuilder
-    private var mainContentArea: some View {
-        ZStack(alignment: .topLeading) {
-            // Scrollable verse content
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(filteredVerses) { verse in
-                            EnhancedVerseRow(
-                                verse: verse,
-                                fontSize: fontSize,
-                                lineSpacing: lineSpacing,
-                                fontFamily: fontFamily,
-                                onTextSelected: { range, text in
-                                    selectedVerse = verse
-                                    selectedRange = range
-                                    selectedText = text
-                                    withAnimation(.spring(response: 0.3)) {
-                                        showHighlightMenu = true
-                                    }
-                                },
-                                onBookmark: {
-                                    verseToBookmark = verse
-                                    showingBookmarkSheet = true
-                                }
-                            )
-                            .id(verse.id)
-                            .padding(.vertical, 8)
-                            .padding(.horizontal)
-                        }
-                        
-                        // Next chapter button
-                        if let nextChapter = nextChapter, searchText.isEmpty {
-                            NextChapterButton(chapter: nextChapter, onTap: {
-                                onChapterChange(nextChapter)
-                            })
-                        }
-                    }
-                    .padding(.vertical)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onAppear {
-                        if let firstVerse = filteredVerses.first {
-                            proxy.scrollTo(firstVerse.id, anchor: .top)
-                        }
-                    }
-                }
-            }
-            
-            // Full-page annotation canvas overlay
-            if showAnnotations {
-                FullPageAnnotationCanvas(
-                    note: getOrCreateChapterDrawing(),
-                    selectedTool: selectedTool,
-                    selectedColor: selectedColor,
-                    penWidth: penWidth,
-                    canvasView: $canvasView
-                )
-                .allowsHitTesting(selectedTool != .none)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
     
     @ToolbarContentBuilder
@@ -390,7 +380,7 @@ struct ChapterView: View {
     }
 }
 
-// MARK: - Enhanced Verse Row (No Dividers, Full Text Wrapping)
+// MARK: - Enhanced Verse Row
 struct EnhancedVerseRow: View {
     let verse: Verse
     let fontSize: Double
@@ -431,7 +421,7 @@ struct EnhancedVerseRow: View {
             }
             .frame(width: 40)
             
-            // Verse text - FULLY WRAPPED
+            // Verse text
             SelectableTextView(
                 text: verse.text,
                 highlights: verseHighlights,
@@ -443,7 +433,7 @@ struct EnhancedVerseRow: View {
             )
             .frame(maxWidth: .infinity, alignment: .leading)
             .foregroundColor(colorTheme.textColor)
-            .fixedSize(horizontal: false, vertical: true) // ENSURES FULL WRAPPING
+            .fixedSize(horizontal: false, vertical: true)
         }
         .contentShape(Rectangle())
         .contextMenu {
@@ -529,7 +519,6 @@ struct AnnotationCanvasView: UIViewRepresentable {
         
         switch selectedTool {
         case .none:
-            // Don't set any tool when none is selected
             break
         case .pen:
             canvasView.tool = PKInkingTool(.pen, color: uiColor, width: penWidth)
@@ -570,7 +559,6 @@ struct AnnotationToolbar: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
-                // Tool selection
                 ForEach(ChapterView.AnnotationTool.allCases, id: \.self) { tool in
                     Button(action: { selectedTool = tool }) {
                         Image(systemName: tool.icon)
@@ -582,10 +570,8 @@ struct AnnotationToolbar: View {
                     .foregroundColor(selectedTool == tool ? .blue : .primary)
                 }
                 
-                Divider()
-                    .frame(height: 40)
+                Divider().frame(height: 40)
                 
-                // Quick colors
                 ForEach(predefinedColors, id: \.self) { color in
                     Button(action: { selectedColor = color }) {
                         Circle()
@@ -615,10 +601,8 @@ struct AnnotationToolbar: View {
                     }
                 }
                 
-                Divider()
-                    .frame(height: 40)
+                Divider().frame(height: 40)
                 
-                // Width slider
                 if selectedTool != .eraser && selectedTool != .lasso && selectedTool != .none {
                     HStack(spacing: 8) {
                         Image(systemName: "line.diagonal")
