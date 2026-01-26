@@ -2,42 +2,39 @@
 //  MainView.swift - FIXED
 //  WrittenWord
 //
-//  Properly constrains detail view to prevent sliding
+//  Prevents sliding by properly managing NavigationSplitView layout
 //
+
 import SwiftUI
 import SwiftData
 
 struct MainView: View {
     @State private var selectedChapter: Chapter?
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @AppStorage("notePosition") private var notePosition: NotePosition = .right
     
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            // Sidebar: Books and Chapters
+            // Sidebar
             SidebarView(selectedChapter: $selectedChapter)
-                .navigationSplitViewColumnWidth(min: 250, ideal: 300, max: 400)
+                .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
         } detail: {
-            // Detail: Properly constrained to prevent sliding
-            detailContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            // Detail - This structure prevents the sliding issue
+            ZStack {
+                if let chapter = selectedChapter {
+                    ChapterView(chapter: chapter) { newChapter in
+                        selectedChapter = newChapter
+                    }
+                    .id(chapter.id) // Force view refresh on chapter change
+                    .transition(.opacity) // Smooth transition
+                } else {
+                    emptyStateView
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Key fix: Explicitly set the detail column width
+            .navigationSplitViewColumnWidth(min: 600, ideal: 900)
         }
         .navigationSplitViewStyle(.balanced)
-    }
-    
-    @ViewBuilder
-    private var detailContent: some View {
-        if let chapter = selectedChapter {
-            ChapterView(
-                chapter: chapter,
-                onChapterChange: { newChapter in
-                    selectedChapter = newChapter
-                }
-            )
-            .id(chapter.id)
-        } else {
-            emptyStateView
-        }
     }
     
     private var emptyStateView: some View {
@@ -47,23 +44,6 @@ struct MainView: View {
             description: Text("Choose a chapter from the sidebar to begin reading")
         )
     }
-}
-
-// MARK: - Supporting Types
-enum NotePosition: String, CaseIterable {
-    case left = "left"
-    case right = "right"
-    
-    var displayName: String {
-        switch self {
-        case .left: return "Left"
-        case .right: return "Right"
-        }
-    }
-}
-
-extension Notification.Name {
-    static let showNotesColumn = Notification.Name("showNotesColumn")
 }
 
 #Preview {

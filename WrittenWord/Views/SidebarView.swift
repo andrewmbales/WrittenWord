@@ -1,9 +1,10 @@
 //
-//  SidebarView.swift
+//  SidebarView.swift - OPTIMIZED
 //  WrittenWord
 //
-//  Refactored: Chapters now shown inline with books
+//  Streamlined with compact chapter buttons
 //
+
 import SwiftUI
 import SwiftData
 
@@ -15,13 +16,7 @@ struct SidebarView: View {
     @State private var expandedBook: Book?
     
     enum SidebarSection: Hashable {
-        case bible
-        case search
-        case notebook
-        case highlights
-        case bookmarks
-        case statistics
-        case settings
+        case bible, search, notebook, highlights, bookmarks, statistics, settings
         
         var title: String {
             switch self {
@@ -70,7 +65,7 @@ struct SidebarView: View {
     
     var body: some View {
         List(selection: $selectedView) {
-            // Main navigation sections
+            // Main navigation
             Section {
                 NavigationLink(value: SidebarSection.bible) {
                     Label(SidebarSection.bible.title, systemImage: SidebarSection.bible.icon)
@@ -139,12 +134,17 @@ struct SidebarView: View {
     }
 }
 
-// MARK: - Bible Books Section Component
+// MARK: - Bible Books Section - OPTIMIZED
 struct BibleBooksSection: View {
     let title: String
     let books: [Book]
     @Binding var expandedBook: Book?
     @Binding var selectedChapter: Chapter?
+    
+    // Grid layout for compact chapter buttons
+    private let columns = [
+        GridItem(.adaptive(minimum: 40, maximum: 50), spacing: 8)
+    ]
     
     var body: some View {
         Section {
@@ -157,34 +157,19 @@ struct BibleBooksSection: View {
                         }
                     )
                 ) {
-                    // Chapters list
-                    ForEach(book.chapters.sorted(by: { $0.number < $1.number })) { chapter in
-                        Button {
-                            selectedChapter = chapter
-                        } label: {
-                            HStack {
-                                Text("Chapter \(chapter.number)")
-                                    .font(.subheadline)
-                                
-                                Spacer()
-                                
-                                // Verse count badge
-                                Text("\(chapter.verses.count)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Color.secondary.opacity(0.1))
-                                    .clipShape(Capsule())
+                    // COMPACT CHAPTER GRID - Numbers only, left-justified
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+                        ForEach(book.chapters.sorted(by: { $0.number < $1.number })) { chapter in
+                            CompactChapterButton(
+                                chapter: chapter,
+                                isSelected: selectedChapter?.id == chapter.id
+                            ) {
+                                selectedChapter = chapter
                             }
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
-                        .background(
-                            selectedChapter?.id == chapter.id ?
-                            Color.accentColor.opacity(0.1) : Color.clear
-                        )
                     }
+                    .padding(.vertical, 8)
+                    .padding(.leading, 8)
                 } label: {
                     HStack {
                         Text(book.name)
@@ -192,6 +177,7 @@ struct BibleBooksSection: View {
                         
                         Spacer()
                         
+                        // Chapter count badge
                         Text("\(book.chapters.count)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -209,6 +195,28 @@ struct BibleBooksSection: View {
     }
 }
 
+// MARK: - Compact Chapter Button (for Sidebar)
+struct CompactChapterButton: View {
+    let chapter: Chapter
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Text("\(chapter.number)")
+                .font(.caption)
+                .fontWeight(isSelected ? .bold : .regular)
+                .foregroundColor(isSelected ? .white : .primary)
+                .frame(width: 40, height: 32)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isSelected ? Color.accentColor : Color.secondary.opacity(0.1))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 #Preview {
     let container = try! ModelContainer(
         for: Book.self,
@@ -220,11 +228,11 @@ struct BibleBooksSection: View {
     )
     
     let genesis = Book(name: "Genesis", order: 1, testament: "OT")
-    genesis.chapters = [Chapter(number: 1), Chapter(number: 2)]
+    genesis.chapters = (1...50).map { Chapter(number: $0, book: genesis) }
     container.mainContext.insert(genesis)
     
     let matthew = Book(name: "Matthew", order: 40, testament: "NT")
-    matthew.chapters = [Chapter(number: 1)]
+    matthew.chapters = (1...28).map { Chapter(number: $0, book: matthew) }
     container.mainContext.insert(matthew)
     
     return NavigationStack {
