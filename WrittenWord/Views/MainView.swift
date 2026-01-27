@@ -21,7 +21,7 @@ struct MainView: View {
             // Detail - This structure prevents the sliding issue
             ZStack {
                 if let chapter = selectedChapter {
-                    ChapterView(chapter: chapter) { newChapter in
+                    ChapterView_Optimized(chapter: chapter) { newChapter in
                         print("🔄 [MAIN] Chapter change callback - FROM: \(chapter.book?.name ?? "Unknown") \(chapter.number) TO: \(newChapter.book?.name ?? "Unknown") \(newChapter.number)")
                         selectedChapter = newChapter
                         print("✅ [MAIN] selectedChapter updated: \(selectedChapter?.book?.name ?? "nil") \(selectedChapter?.number ?? -1)")
@@ -37,13 +37,14 @@ struct MainView: View {
             .navigationSplitViewColumnWidth(min: 600, ideal: 900)
             // CRITICAL: Add navigationDestination here to handle Chapter navigation
             .navigationDestination(for: Chapter.self) { chapter in
-                print("🧭 [MAIN] NavigationDestination triggered: \(chapter.book?.name ?? "Unknown") \(chapter.number) (ID: \(chapter.id))")
-                print("🧭 [MAIN] Current selectedChapter before navigation: \(selectedChapter?.book?.name ?? "nil") \(selectedChapter?.number ?? -1)")
-                
-                return ChapterView(chapter: chapter) { newChapter in
+                ChapterView_Optimized(chapter: chapter) { newChapter in
                     print("🔄 [MAIN] NavigationDestination callback: \(newChapter.book?.name ?? "Unknown") \(newChapter.number)")
                     selectedChapter = newChapter
                     print("✅ [MAIN] NavigationDestination updated selectedChapter: \(selectedChapter?.book?.name ?? "nil") \(selectedChapter?.number ?? -1)")
+                }
+                .onAppear {
+                    print("🧭 [MAIN] NavigationDestination triggered: \(chapter.book?.name ?? "Unknown") \(chapter.number) (ID: \(chapter.id))")
+                    print("🧭 [MAIN] Current selectedChapter before navigation: \(selectedChapter?.book?.name ?? "nil") \(selectedChapter?.number ?? -1)")
                 }
             }
         }

@@ -101,7 +101,7 @@ struct SidebarView: View {
             
             // Study tools
             Section("My Study") {
-                NavigationLink(destination: NotebookView()) {
+                NavigationLink(destination: NotebookView_Optimized()) {
                     Label(SidebarSection.notebook.title, systemImage: SidebarSection.notebook.icon)
                         .foregroundStyle(SidebarSection.notebook.color)
                 }

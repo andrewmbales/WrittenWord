@@ -20,6 +20,24 @@ enum NotePosition: String, CaseIterable {
     }
 }
 
+enum AnnotationTool: String, CaseIterable {
+    case none
+    case pen
+    case highlighter
+    case eraser
+    case lasso
+
+    var icon: String {
+        switch self {
+        case .none: return "nosign"
+        case .pen: return "pencil"
+        case .highlighter: return "highlighter"
+        case .eraser: return "eraser.fill"
+        case .lasso: return "lasso"
+        }
+    }
+}
+
 // MARK: - Color Theme
 enum ColorTheme: String, CaseIterable {
     case system = "System"
