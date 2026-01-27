@@ -13,6 +13,7 @@ final class Verse: Identifiable {
     var number: Int
     var text: String
     var version: String
+    @Relationship(inverse: \Chapter.verses)
     var chapter: Chapter?
     var notes: [Note] = []
     

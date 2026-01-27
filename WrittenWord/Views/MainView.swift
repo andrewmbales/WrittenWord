@@ -1,8 +1,8 @@
 //
-//  MainView.swift - FIXED NAVIGATION
+//  MainView.swift - FIXED
 //  WrittenWord
 //
-//  Fixed: Chapter selection now properly navigates to chapter view
+//  Properly handles NavigationSplitView with navigationDestination
 //
 
 import SwiftUI
@@ -18,17 +18,42 @@ struct MainView: View {
             SidebarView(selectedChapter: $selectedChapter)
                 .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
         } detail: {
-            // Detail - Fixed navigation
-            if let chapter = selectedChapter {
-                ChapterView(chapter: chapter) { newChapter in
-                    selectedChapter = newChapter
+            // Detail - This structure prevents the sliding issue
+            ZStack {
+                if let chapter = selectedChapter {
+                    ChapterView(chapter: chapter) { newChapter in
+                        print("🔄 [MAIN] Chapter change callback - FROM: \(chapter.book?.name ?? "Unknown") \(chapter.number) TO: \(newChapter.book?.name ?? "Unknown") \(newChapter.number)")
+                        selectedChapter = newChapter
+                        print("✅ [MAIN] selectedChapter updated: \(selectedChapter?.book?.name ?? "nil") \(selectedChapter?.number ?? -1)")
+                    }
+                    .id(chapter.id)
+                    .transition(.opacity)
+                } else {
+                    emptyStateView
                 }
-                .id(chapter.id) // Force view refresh on chapter change
-            } else {
-                emptyStateView
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Key fix: Explicitly set the detail column width
+            .navigationSplitViewColumnWidth(min: 600, ideal: 900)
+            // CRITICAL: Add navigationDestination here to handle Chapter navigation
+            .navigationDestination(for: Chapter.self) { chapter in
+                print("🧭 [MAIN] NavigationDestination triggered: \(chapter.book?.name ?? "Unknown") \(chapter.number) (ID: \(chapter.id))")
+                print("🧭 [MAIN] Current selectedChapter before navigation: \(selectedChapter?.book?.name ?? "nil") \(selectedChapter?.number ?? -1)")
+                
+                return ChapterView(chapter: chapter) { newChapter in
+                    print("🔄 [MAIN] NavigationDestination callback: \(newChapter.book?.name ?? "Unknown") \(newChapter.number)")
+                    selectedChapter = newChapter
+                    print("✅ [MAIN] NavigationDestination updated selectedChapter: \(selectedChapter?.book?.name ?? "nil") \(selectedChapter?.number ?? -1)")
+                }
             }
         }
         .navigationSplitViewStyle(.balanced)
+        .onAppear {
+            print("🏠 [MAIN] MainView appeared - selectedChapter: \(selectedChapter?.book?.name ?? "nil") \(selectedChapter?.number ?? -1)")
+        }
+        .onChange(of: selectedChapter) { oldValue, newValue in
+            print("🏠 [MAIN] selectedChapter changed FROM: \(oldValue?.book?.name ?? "nil") \(oldValue?.number ?? -1) TO: \(newValue?.book?.name ?? "nil") \(newValue?.number ?? -1)")
+        }
     }
     
     private var emptyStateView: some View {

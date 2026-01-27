@@ -93,6 +93,17 @@ func seedDataIfNeeded(container: ModelContainer) async {
             "Jude", "Revelation"
         ]
 
+        if let firstBook = decoded.first {
+            print("Loaded \(decoded.count) books from JSON")
+            if let firstChapter = firstBook.chapters.first {
+                print("First book: \(firstBook.name), chapters: \(firstBook.chapters.count)")
+                print("First chapter: \(firstChapter.number), verses: \(firstChapter.verses.count)")
+                if let firstVerse = firstChapter.verses.first {
+                    print("First verse: \(firstVerse.number) \(firstVerse.text.prefix(40))")
+                }
+            }
+        }
+
         for (index, b) in decoded.enumerated() {
             print("Seeding book: \(b.name) with \(b.chapters.count) chapters")
             
@@ -117,27 +128,39 @@ func seedDataIfNeeded(container: ModelContainer) async {
             }
             
             let book = Book(name: b.name, order: order, testament: test)
+            modelContext.insert(book)
             
             // Sort chapters by number
             let sortedChapters = b.chapters.sorted { $0.number < $1.number }
             for ch in sortedChapters {
-                let chapter = Chapter(number: ch.number)
-                chapter.book = book
+                let chapter = Chapter(number: ch.number, book: book)
+                modelContext.insert(chapter)
                 
                 // Sort verses by number
                 let sortedVerses = ch.verses.sorted { $0.number < $1.number }
                 for v in sortedVerses {
-                    let verse = Verse(number: v.number, text: v.text)
-                    verse.chapter = chapter
+                    let verse = Verse(number: v.number, text: v.text, version: "KJV", chapter: chapter)
+                    modelContext.insert(verse)
                     chapter.verses.append(verse)
                 }
                 book.chapters.append(chapter)
             }
-            modelContext.insert(book)
         }
         try modelContext.save()
         print("Seeding complete")
         didSeedData = true
+
+        do {
+            let savedBooks = try modelContext.fetch(FetchDescriptor<Book>())
+            print("Total books in database: \(savedBooks.count)")
+            if let savedFirst = savedBooks.sorted(by: { $0.order < $1.order }).first,
+               let savedChapter = savedFirst.chapters.sorted(by: { $0.number < $1.number }).first {
+                print("Saved first book: \(savedFirst.name), chapters: \(savedFirst.chapters.count)")
+                print("Saved first chapter verses: \(savedChapter.verses.count)")
+            }
+        } catch {
+            print("Post-seed validation failed: \(error)")
+        }
         
         // Force a small delay to ensure UI updates
         try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds

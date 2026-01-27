@@ -14,6 +14,7 @@ import PencilKit
 struct ChapterView: View {
     let chapter: Chapter
     @State private var viewModel: ChapterViewModel?
+    @State private var didScrollToTop: Bool = false
     @Environment(\.modelContext) private var modelContext
     
     // Settings
@@ -40,8 +41,12 @@ struct ChapterView: View {
             }
         }
         .onAppear {
+            print("👁️ [CHAPTER] ChapterView onAppear - \(chapter.book?.name ?? "Unknown") \(chapter.number) (ID: \(chapter.id))")
             if viewModel == nil {
+                print("🔧 [CHAPTER] Creating new ChapterViewModel")
                 viewModel = ChapterViewModel(chapter: chapter, modelContext: modelContext)
+            } else {
+                print("🔄 [CHAPTER] Using existing ChapterViewModel")
             }
         }
     }
@@ -107,9 +112,11 @@ struct ChapterView: View {
             }
         }
         .onAppear {
-            loadExistingAnnotations(viewModel: vm)
+            print("💾 [CHAPTER] Loading annotations for: \(viewModel.chapter.reference)")
+            Task { await loadAnnotationsAsync(viewModel: vm) }
         }
         .onDisappear {
+            print("🗑️ [CHAPTER] ChapterView onDisappear - saving annotations for: \(viewModel.chapter.reference)")
             saveAnnotations(viewModel: vm)
         }
     }
@@ -156,6 +163,25 @@ struct ChapterView: View {
         }
     }
     
+    // Async load for existing annotations to avoid blocking the main thread
+    private func loadAnnotationsAsync(viewModel: ChapterViewModel) async {
+        let chapterId = viewModel.chapter.id
+        let descriptor = FetchDescriptor<Note>(
+            predicate: #Predicate { note in
+                note.chapter?.id == chapterId && note.verse == nil
+            }
+        )
+        // Perform fetch (SwiftData may still require main, but yielding helps UI render first)
+        let notes = try? modelContext.fetch(descriptor)
+        if let drawing = notes?.first?.drawing {
+            // Yield briefly to let the first frame render before applying large drawings
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+            await MainActor.run {
+                viewModel.canvasView.drawing = drawing
+            }
+        }
+    }
+    
     // MARK: - Chapter Content with FIXED Interaction
     @ViewBuilder
     private func chapterContent(_ vm: ChapterViewModel) -> some View {
@@ -195,14 +221,20 @@ struct ChapterView: View {
                             
                             if let nextChapter = vm.nextChapter, vm.searchText.isEmpty {
                                 NextChapterButton(chapter: nextChapter) {
+                                    print("⏭️ [CHAPTER] NextChapterButton tapped - FROM: \(chapter.book?.name ?? "Unknown") \(chapter.number) TO: \(nextChapter.book?.name ?? "Unknown") \(nextChapter.number)")
                                     onChapterChange(nextChapter)
                                 }
                             }
                         }
                         .padding(.vertical)
                         .onAppear {
-                            if let firstVerse = vm.filteredVerses.first {
-                                proxy.scrollTo(firstVerse.id, anchor: .top)
+                            if !didScrollToTop {
+                                didScrollToTop = true
+                                DispatchQueue.main.async {
+                                    if let firstVerse = vm.filteredVerses.first {
+                                        proxy.scrollTo(firstVerse.id, anchor: .top)
+                                    }
+                                }
                             }
                         }
                     }
@@ -245,6 +277,7 @@ struct ChapterView: View {
             HStack(spacing: 8) {
                 if let previous = viewModel.previousChapter {
                     Button {
+                        print("⬅️ [CHAPTER] Previous chapter button tapped - FROM: \(viewModel.chapter.book?.name ?? "Unknown") \(viewModel.chapter.number) TO: \(previous.book?.name ?? "Unknown") \(previous.number)")
                         onChapterChange(previous)
                     } label: {
                         Image(systemName: "chevron.left")
@@ -294,6 +327,7 @@ struct ChapterView: View {
                 
                 if let next = viewModel.nextChapter {
                     Button {
+                        print("➡️ [CHAPTER] Next chapter button tapped - FROM: \(viewModel.chapter.book?.name ?? "Unknown") \(viewModel.chapter.number) TO: \(next.book?.name ?? "Unknown") \(next.number)")
                         onChapterChange(next)
                     } label: {
                         Image(systemName: "chevron.right")
@@ -314,7 +348,10 @@ struct NextChapterButton: View {
             Divider()
                 .padding(.horizontal)
             
-            Button(action: onTap) {
+            Button(action: {
+                print("🎯 [NEXT BUTTON] NextChapterButton action triggered for: \(chapter.book?.name ?? "Unknown") \(chapter.number)")
+                onTap()
+            }) {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Continue Reading")
@@ -365,3 +402,4 @@ struct ColorPickerSheet: View {
         }
     }
 }
+

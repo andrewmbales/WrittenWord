@@ -1,8 +1,8 @@
 //
-//  SidebarView.swift - FIXED NAVIGATION
+//  SidebarView.swift - FIXED
 //  WrittenWord
 //
-//  Fixed: Chapter buttons now properly update selectedChapter binding
+//  Fixed navigation to properly use NavigationLink
 //
 
 import SwiftUI
@@ -68,7 +68,7 @@ struct SidebarView: View {
     var body: some View {
         List(selection: $selectedView) {
             // Main navigation
-            Section("Bible") {
+            Section ("Bible"){
                 NavigationLink(destination: GlobalSearchView()) {
                     Label(SidebarSection.search.title, systemImage: SidebarSection.search.icon)
                         .foregroundStyle(SidebarSection.search.color)
@@ -79,7 +79,7 @@ struct SidebarView: View {
                         .foregroundStyle(SidebarSection.bible.color)
                 }
                 
-                // Bible books with chapters
+                // Bible books with chapters - directly under Bible button
                 DisclosureGroup("Old Testament", isExpanded: $isOldTestamentExpanded) {
                     BibleBooksSection(
                         title: "",
@@ -135,6 +135,12 @@ struct SidebarView: View {
         }
         .listStyle(.sidebar)
         .navigationTitle("Written Word")
+        .onAppear {
+            print("📋 [SIDEBAR] SidebarView appeared - selectedChapter: \(selectedChapter?.book?.name ?? "nil") \(selectedChapter?.number ?? -1)")
+        }
+        .onChange(of: selectedChapter) { oldValue, newValue in
+            print("📋 [SIDEBAR] selectedChapter changed FROM: \(oldValue?.book?.name ?? "nil") \(oldValue?.number ?? -1) TO: \(newValue?.book?.name ?? "nil") \(newValue?.number ?? -1)")
+        }
     }
 }
 
@@ -150,6 +156,24 @@ struct BibleBooksSection: View {
         GridItem(.adaptive(minimum: 40, maximum: 50), spacing: 8)
     ]
     
+    private func handleChapterTap(chapter: Chapter) {
+        print("🔍 [SIDEBAR] === CHAPTER TAP START ===")
+        print("🔍 [SIDEBAR] Tapped: \(chapter.book?.name ?? "Unknown") \(chapter.number)")
+        print("🔍 [SIDEBAR] Chapter ID: \(chapter.id.uuidString)")
+        print("🔍 [SIDEBAR] Book ID: \(chapter.book?.id.uuidString ?? "nil")")
+        print("🔍 [SIDEBAR] Previous selectedChapter: \(selectedChapter?.book?.name ?? "nil") \(selectedChapter?.number ?? -1)")
+        print("🔍 [SIDEBAR] Previous selectedChapter ID: \(selectedChapter?.id.uuidString ?? "nil")")
+        
+        let oldValue = selectedChapter
+        selectedChapter = chapter
+        
+        print("✅ [SIDEBAR] selectedChapter UPDATED: \(selectedChapter?.book?.name ?? "nil") \(selectedChapter?.number ?? -1)")
+        print("✅ [SIDEBAR] New selectedChapter ID: \(selectedChapter?.id.uuidString ?? "nil")")
+        print("🔍 [SIDEBAR] Chapter changed: \(oldValue?.id != chapter.id ? "YES" : "NO")")
+        print("🚀 [SIDEBAR] NavigationLink value set to: \(chapter.id)")
+        print("🔍 [SIDEBAR] === CHAPTER TAP END ===")
+    }
+    
     var body: some View {
         Section {
             ForEach(books) { book in
@@ -161,17 +185,18 @@ struct BibleBooksSection: View {
                         }
                     )
                 ) {
-                    // FIXED: Chapter grid with proper binding
+                    // COMPACT CHAPTER GRID - Using NavigationLink properly
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
                         ForEach(book.chapters.sorted(by: { $0.number < $1.number })) { chapter in
-                            CompactChapterButton(
-                                chapter: chapter,
-                                isSelected: selectedChapter?.id == chapter.id
-                            ) {
-                                // CRITICAL FIX: Actually update the binding
-                                print("📖 Selected chapter: \(chapter.book?.name ?? "") \(chapter.number)")
-                                selectedChapter = chapter
+                            // FIXED: Use NavigationLink instead of Button
+                            NavigationLink(value: chapter) {
+                                CompactChapterLabel(
+                                    chapter: chapter,
+                                    isSelected: selectedChapter?.id == chapter.id
+                                )
                             }
+                            .buttonStyle(.plain)
+                            .simultaneousGesture(TapGesture().onEnded { handleChapterTap(chapter: chapter) })
                         }
                     }
                     .padding(.vertical, 8)
@@ -200,6 +225,24 @@ struct BibleBooksSection: View {
                     .font(.subheadline.bold())
             }
         }
+    }
+}
+
+// MARK: - Compact Chapter Label (for Sidebar) - RENAMED from CompactChapterButton
+struct CompactChapterLabel: View {
+    let chapter: Chapter
+    let isSelected: Bool
+    
+    var body: some View {
+        Text("\(chapter.number)")
+            .font(.caption)
+            .fontWeight(isSelected ? .bold : .regular)
+            .foregroundColor(isSelected ? .white : .primary)
+            .frame(width: 40, height: 32)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? Color.accentColor : Color.secondary.opacity(0.1))
+            )
     }
 }
 

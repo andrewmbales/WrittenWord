@@ -40,9 +40,17 @@ class ChapterViewModel {
     var showingBookmarkSheet = false
     var verseToBookmark: Verse?
     
+    // Caches to avoid repeated heavy computations during render
+    private var _sortedVerses: [Verse]?
+    private var _previousChapter: Chapter?
+    private var _nextChapter: Chapter?
+    
     // MARK: - Computed Properties
     var sortedVerses: [Verse] {
-        chapter.verses.sorted { $0.number < $1.number }
+        if let cached = _sortedVerses { return cached }
+        let computed = chapter.verses.sorted { $0.number < $1.number }
+        _sortedVerses = computed
+        return computed
     }
     
     var filteredVerses: [Verse] {
@@ -54,28 +62,37 @@ class ChapterViewModel {
     }
     
     var previousChapter: Chapter? {
+        if let cached = _previousChapter { return cached }
         guard let book = chapter.book else { return nil }
         let chapters = book.chapters.sorted { $0.number < $1.number }
         guard let currentIndex = chapters.firstIndex(of: chapter), currentIndex > 0 else {
             return nil
         }
-        return chapters[currentIndex - 1]
+        let prev = chapters[currentIndex - 1]
+        _previousChapter = prev
+        return prev
     }
     
     var nextChapter: Chapter? {
+        if let cached = _nextChapter { return cached }
         guard let book = chapter.book else { return nil }
         let chapters = book.chapters.sorted { $0.number < $1.number }
         guard let currentIndex = chapters.firstIndex(of: chapter),
               currentIndex < chapters.count - 1 else {
             return nil
         }
-        return chapters[currentIndex + 1]
+        let next = chapters[currentIndex + 1]
+        _nextChapter = next
+        return next
     }
     
     // MARK: - Initialization
     init(chapter: Chapter, modelContext: ModelContext) {
         self.chapter = chapter
         self.modelContext = modelContext
+        _sortedVerses = nil
+        _previousChapter = nil
+        _nextChapter = nil
     }
     
     // MARK: - Actions
@@ -144,7 +161,7 @@ enum AnnotationTool: String, CaseIterable {
     
     var icon: String {
         switch self {
-        case .none: return "none"
+        case .none: return "circle"
         default: return rawValue
         }
     }
