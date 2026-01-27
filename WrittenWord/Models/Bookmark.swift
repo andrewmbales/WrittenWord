@@ -39,7 +39,13 @@ final class Bookmark: Identifiable {
         self.verse = verse
         self.chapter = chapter
         self.category = category
-        self.color = color.toHex()
+        // Direct hex conversion to avoid extension ambiguity
+        let uiColor = UIColor(color)
+        let components = uiColor.cgColor.components ?? [0, 0, 0, 0]
+        let r = Int(components[0] * 255.0)
+        let g = Int(components[1] * 255.0)
+        let b = Int(components[2] * 255.0)
+        self.color = String(format: "#%02X%02X%02X", r, g, b)
         self.notes = notes
         self.createdAt = Date()
         self.isPinned = isPinned
@@ -62,7 +68,20 @@ final class Bookmark: Identifiable {
     }
     
     var categoryColor: Color {
-        Color(hex: color) ?? .blue
+        // Direct hex parsing to avoid extension ambiguity
+        var hexSanitized = color.trimmingCharacters(in: .whitespacesAndNewlines)
+        hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
+        
+        var rgb: UInt64 = 0
+        guard Scanner(string: hexSanitized).scanHexInt64(&rgb) else {
+            return .blue
+        }
+        
+        let r = Double((rgb & 0xFF0000) >> 16) / 255.0
+        let g = Double((rgb & 0x00FF00) >> 8) / 255.0
+        let b = Double(rgb & 0x0000FF) / 255.0
+        
+        return Color(red: r, green: g, blue: b)
     }
 }
 

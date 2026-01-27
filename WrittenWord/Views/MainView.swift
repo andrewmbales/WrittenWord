@@ -1,8 +1,8 @@
 //
-//  MainView.swift - FIXED
+//  MainView.swift - FIXED NAVIGATION
 //  WrittenWord
 //
-//  Prevents sliding by properly managing NavigationSplitView layout
+//  Fixed: Chapter selection now properly navigates to chapter view
 //
 
 import SwiftUI
@@ -18,21 +18,15 @@ struct MainView: View {
             SidebarView(selectedChapter: $selectedChapter)
                 .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
         } detail: {
-            // Detail - This structure prevents the sliding issue
-            ZStack {
-                if let chapter = selectedChapter {
-                    ChapterView(chapter: chapter) { newChapter in
-                        selectedChapter = newChapter
-                    }
-                    .id(chapter.id) // Force view refresh on chapter change
-                    .transition(.opacity) // Smooth transition
-                } else {
-                    emptyStateView
+            // Detail - Fixed navigation
+            if let chapter = selectedChapter {
+                ChapterView(chapter: chapter) { newChapter in
+                    selectedChapter = newChapter
                 }
+                .id(chapter.id) // Force view refresh on chapter change
+            } else {
+                emptyStateView
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // Key fix: Explicitly set the detail column width
-            .navigationSplitViewColumnWidth(min: 600, ideal: 900)
         }
         .navigationSplitViewStyle(.balanced)
     }

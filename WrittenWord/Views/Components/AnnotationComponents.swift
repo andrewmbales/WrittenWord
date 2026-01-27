@@ -1,14 +1,14 @@
 //
-//  AnnotationComponents.swift
+//  AnnotationComponents_FIXED.swift
 //  WrittenWord
 //
-//  Separated annotation UI components for better organization
+//  FIXED: Better annotation canvas that doesn't interfere with scrolling
 //
 
 import SwiftUI
 import PencilKit
 
-// MARK: - Annotation Toolbar
+// MARK: - Annotation Toolbar (unchanged, kept for reference)
 struct AnnotationToolbar: View {
     @Binding var selectedTool: AnnotationTool
     @Binding var selectedColor: Color
@@ -123,59 +123,7 @@ struct AnnotationToolbar: View {
     }
 }
 
-// MARK: - Highlight Palette
-struct HighlightPalette: View {
-    @Binding var selectedColor: HighlightColor
-    let onHighlight: (HighlightColor) -> Void
-    let onDismiss: () -> Void
-    
-    var body: some View {
-        HStack {
-            Text("Highlight:")
-                .font(.subheadline)
-                .fontWeight(.medium)
-            
-            Spacer()
-            
-            // Color options
-            ForEach(HighlightColor.allCases, id: \.self) { color in
-                colorButton(for: color)
-            }
-            
-            Spacer()
-            
-            Button("Cancel", action: onDismiss)
-                .font(.subheadline)
-        }
-        .padding()
-        .background(.ultraThinMaterial)
-    }
-    
-    private func colorButton(for color: HighlightColor) -> some View {
-        Button {
-            selectedColor = color
-            onHighlight(color)
-        } label: {
-            Circle()
-                .fill(color.color)
-                .frame(width: 32, height: 32)
-                .overlay(
-                    Circle()
-                        .strokeBorder(Color.primary.opacity(0.2), lineWidth: 1)
-                )
-                .overlay(
-                    selectedColor == color ?
-                    Image(systemName: "checkmark")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                    : nil
-                )
-        }
-    }
-}
-
-// MARK: - Annotation Canvas View
+// MARK: - FIXED Annotation Canvas View
 struct AnnotationCanvasView: UIViewRepresentable {
     @Binding var drawing: PKDrawing
     let selectedTool: AnnotationTool
@@ -188,12 +136,14 @@ struct AnnotationCanvasView: UIViewRepresentable {
         canvasView.isOpaque = false
         canvasView.drawing = drawing
         canvasView.delegate = context.coordinator
-        canvasView.alwaysBounceVertical = false  // Changed to false
+        
+        // CRITICAL FIX: Disable bouncing to prevent scroll conflicts
+        canvasView.alwaysBounceVertical = false
         canvasView.alwaysBounceHorizontal = false
         
-        // Start with drawing disabled
-        canvasView.drawingPolicy = .pencilOnly
+        // Start with interaction disabled
         canvasView.isUserInteractionEnabled = false
+        canvasView.drawingPolicy = .pencilOnly
         
         updateTool()
         return canvasView
@@ -216,7 +166,7 @@ struct AnnotationCanvasView: UIViewRepresentable {
         
         switch selectedTool {
         case .none:
-            // Explicitly set no tool
+            // No tool selected
             break
         case .pen:
             canvasView.tool = PKInkingTool(.pen, color: uiColor, width: penWidth)
@@ -234,13 +184,13 @@ struct AnnotationCanvasView: UIViewRepresentable {
     }
     
     private func updateInteractionState() {
-        // Enable/disable based on tool selection
+        // CRITICAL FIX: Only enable when a tool is selected
         if selectedTool == .none {
             canvasView.isUserInteractionEnabled = false
             canvasView.drawingPolicy = .pencilOnly
         } else {
             canvasView.isUserInteractionEnabled = true
-            canvasView.drawingPolicy = .anyInput  // Allow finger and pencil
+            canvasView.drawingPolicy = .anyInput
         }
     }
     
@@ -257,45 +207,30 @@ struct AnnotationCanvasView: UIViewRepresentable {
     }
 }
 
-// MARK: - Full Page Annotation Canvas
-struct FullPageAnnotationCanvas: View {
-    @Bindable var note: Note
-    let selectedTool: AnnotationTool
-    let selectedColor: Color
-    let penWidth: CGFloat
-    @Binding var canvasView: PKCanvasView
-    
-    var body: some View {
-        AnnotationCanvasView(
-            drawing: Binding(
-                get: { note.drawing },
-                set: { note.drawing = $0 }
-            ),
-            selectedTool: selectedTool,
-            selectedColor: selectedColor,
-            penWidth: penWidth,
-            canvasView: $canvasView
+// MARK: - Preview
+#Preview("Annotation Toolbar") {
+    VStack {
+        AnnotationToolbar(
+            selectedTool: .constant(.pen),
+            selectedColor: .constant(.black),
+            penWidth: .constant(2.0),
+            showingColorPicker: .constant(false)
         )
-        .background(Color.clear)
-        // Only enable interaction when a tool is selected (not .none)
-        .allowsHitTesting(selectedTool != .none)
+        Spacer()
     }
 }
 
-// MARK: - Preview
-#Preview("Annotation Toolbar") {
-    AnnotationToolbar(
-        selectedTool: .constant(.pen),
-        selectedColor: .constant(.black),
-        penWidth: .constant(2.0),
-        showingColorPicker: .constant(false)
-    )
-}
-
 #Preview("Highlight Palette") {
-    HighlightPalette(
-        selectedColor: .constant(.yellow),
-        onHighlight: { _ in },
-        onDismiss: {}
-    )
+    VStack {
+        HighlightPalette(
+            selectedColor: .constant(.yellow),
+            onHighlight: { color in
+                print("Selected color: \(color)")
+            },
+            onDismiss: {
+                print("Dismissed")
+            }
+        )
+        Spacer()
+    }
 }

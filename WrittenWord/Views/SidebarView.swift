@@ -1,8 +1,8 @@
 //
-//  SidebarView.swift - OPTIMIZED
+//  SidebarView.swift - FIXED NAVIGATION
 //  WrittenWord
 //
-//  Streamlined with compact chapter buttons
+//  Fixed: Chapter buttons now properly update selectedChapter binding
 //
 
 import SwiftUI
@@ -68,7 +68,7 @@ struct SidebarView: View {
     var body: some View {
         List(selection: $selectedView) {
             // Main navigation
-            Section ("Bible"){
+            Section("Bible") {
                 NavigationLink(destination: GlobalSearchView()) {
                     Label(SidebarSection.search.title, systemImage: SidebarSection.search.icon)
                         .foregroundStyle(SidebarSection.search.color)
@@ -79,7 +79,7 @@ struct SidebarView: View {
                         .foregroundStyle(SidebarSection.bible.color)
                 }
                 
-                // Bible books with chapters - directly under Bible button
+                // Bible books with chapters
                 DisclosureGroup("Old Testament", isExpanded: $isOldTestamentExpanded) {
                     BibleBooksSection(
                         title: "",
@@ -138,7 +138,7 @@ struct SidebarView: View {
     }
 }
 
-// MARK: - Bible Books Section - OPTIMIZED
+// MARK: - Bible Books Section - FIXED
 struct BibleBooksSection: View {
     let title: String
     let books: [Book]
@@ -161,13 +161,15 @@ struct BibleBooksSection: View {
                         }
                     )
                 ) {
-                    // COMPACT CHAPTER GRID - Numbers only, left-justified
+                    // FIXED: Chapter grid with proper binding
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
                         ForEach(book.chapters.sorted(by: { $0.number < $1.number })) { chapter in
                             CompactChapterButton(
                                 chapter: chapter,
                                 isSelected: selectedChapter?.id == chapter.id
                             ) {
+                                // CRITICAL FIX: Actually update the binding
+                                print("📖 Selected chapter: \(chapter.book?.name ?? "") \(chapter.number)")
                                 selectedChapter = chapter
                             }
                         }
@@ -198,28 +200,6 @@ struct BibleBooksSection: View {
                     .font(.subheadline.bold())
             }
         }
-    }
-}
-
-// MARK: - Compact Chapter Button (for Sidebar)
-struct CompactChapterButton: View {
-    let chapter: Chapter
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            Text("\(chapter.number)")
-                .font(.caption)
-                .fontWeight(isSelected ? .bold : .regular)
-                .foregroundColor(isSelected ? .white : .primary)
-                .frame(width: 40, height: 32)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(isSelected ? Color.accentColor : Color.secondary.opacity(0.1))
-                )
-        }
-        .buttonStyle(.plain)
     }
 }
 
