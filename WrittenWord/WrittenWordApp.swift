@@ -2,7 +2,7 @@
 //  WrittenWordApp.swift
 //  WrittenWord
 //
-//  Created by Andrew Bales on 1/21/26.
+//  Make sure this is using MainView_Fixed (or MainView_Diagnostic for debugging)
 //
 
 import SwiftUI
@@ -35,11 +35,19 @@ struct WrittenWordApp: App {
     
     var body: some Scene {
         WindowGroup {
+            // USE THIS FOR DEBUGGING:
             MainView()
                 .modelContainer(sharedModelContainer)
                 .task {
                     await seedDataIfNeeded(container: sharedModelContainer)
                 }
+            
+            // THEN SWITCH BACK TO THIS WHEN WORKING:
+            // MainView_Fixed()
+            //     .modelContainer(sharedModelContainer)
+            //     .task {
+            //         await seedDataIfNeeded(container: sharedModelContainer)
+            //     }
         }
     }
 }
@@ -48,29 +56,30 @@ struct WrittenWordApp: App {
 func seedDataIfNeeded(container: ModelContainer) async {
     @AppStorage("didSeedData") var didSeedData: Bool = false
     
-    print("Seeding started. didSeedData: \(didSeedData)")
+    print("🌱 Seeding started. didSeedData: \(didSeedData)")
     
     let modelContext = container.mainContext
     do {
         // Check if any books actually exist in the database
         let fetch = FetchDescriptor<Book>(predicate: nil)
         let existing = try modelContext.fetch(fetch)
-        print("Existing books count: \(existing.count)")
+        print("📚 Existing books count: \(existing.count)")
         
         // Reset seed flag if no books exist but flag says we're seeded
         if existing.isEmpty && didSeedData {
-            print("Resetting seed flag - no books found but flag was true")
+            print("🔄 Resetting seed flag - no books found but flag was true")
             didSeedData = false
         }
         
-        guard !didSeedData else { 
-            print("Already seeded, skipping")
-            return 
+        guard !didSeedData else {
+            print("✅ Already seeded, skipping")
+            return
         }
 
+        print("📖 Loading bundled JSON...")
         let data = try loadBundledJSON(named: "kjv", withExtension: "json")
         let decoded = try JSONDecoder().decode([DecodableBook].self, from: data)
-        print("Decoded books: \(decoded.count)")
+        print("✅ Decoded \(decoded.count) books")
 
         // Define the canonical order of books in the Bible
         let otBooks = [
@@ -93,19 +102,8 @@ func seedDataIfNeeded(container: ModelContainer) async {
             "Jude", "Revelation"
         ]
 
-        if let firstBook = decoded.first {
-            print("Loaded \(decoded.count) books from JSON")
-            if let firstChapter = firstBook.chapters.first {
-                print("First book: \(firstBook.name), chapters: \(firstBook.chapters.count)")
-                print("First chapter: \(firstChapter.number), verses: \(firstChapter.verses.count)")
-                if let firstVerse = firstChapter.verses.first {
-                    print("First verse: \(firstVerse.number) \(firstVerse.text.prefix(40))")
-                }
-            }
-        }
-
         for (index, b) in decoded.enumerated() {
-            print("Seeding book: \(b.name) with \(b.chapters.count) chapters")
+            print("📝 Seeding book \(index + 1)/\(decoded.count): \(b.name)")
             
             // Determine the testament based on the book name
             let test: String
@@ -114,7 +112,7 @@ func seedDataIfNeeded(container: ModelContainer) async {
             } else if ntBooks.contains(b.name) {
                 test = "NT"
             } else {
-                test = b.testament ?? "OT" // Fallback to original testament or OT
+                test = b.testament ?? "OT"
             }
             
             // Determine the order based on the canonical order
@@ -124,19 +122,17 @@ func seedDataIfNeeded(container: ModelContainer) async {
             } else if let ntIndex = ntBooks.firstIndex(of: b.name) {
                 order = otBooks.count + ntIndex + 1
             } else {
-                order = index + 1 // Fallback to the order in the JSON
+                order = index + 1
             }
             
             let book = Book(name: b.name, order: order, testament: test)
             modelContext.insert(book)
             
-            // Sort chapters by number
             let sortedChapters = b.chapters.sorted { $0.number < $1.number }
             for ch in sortedChapters {
                 let chapter = Chapter(number: ch.number, book: book)
                 modelContext.insert(chapter)
                 
-                // Sort verses by number
                 let sortedVerses = ch.verses.sorted { $0.number < $1.number }
                 for v in sortedVerses {
                     let verse = Verse(number: v.number, text: v.text, version: "KJV", chapter: chapter)
@@ -146,34 +142,24 @@ func seedDataIfNeeded(container: ModelContainer) async {
                 book.chapters.append(chapter)
             }
         }
+        
+        print("💾 Saving to database...")
         try modelContext.save()
-        print("Seeding complete")
+        print("✅ Seeding complete!")
         didSeedData = true
 
-        do {
-            let savedBooks = try modelContext.fetch(FetchDescriptor<Book>())
-            print("Total books in database: \(savedBooks.count)")
-            if let savedFirst = savedBooks.sorted(by: { $0.order < $1.order }).first,
-               let savedChapter = savedFirst.chapters.sorted(by: { $0.number < $1.number }).first {
-                print("Saved first book: \(savedFirst.name), chapters: \(savedFirst.chapters.count)")
-                print("Saved first chapter verses: \(savedChapter.verses.count)")
-            }
-        } catch {
-            print("Post-seed validation failed: \(error)")
-        }
+        // Verify
+        let savedBooks = try modelContext.fetch(FetchDescriptor<Book>())
+        print("📊 Total books in database: \(savedBooks.count)")
         
-        // Force a small delay to ensure UI updates
-        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
     } catch {
-        print("Seeding failed: \(error)")
+        print("❌ Seeding failed: \(error)")
     }
 }
 
 func loadBundledJSON(named name: String, withExtension ext: String) throws -> Data {
     guard let url = Bundle.main.url(forResource: name, withExtension: ext) else {
-        print("Failed to find \(name).\(ext) in bundle")
-        print("Bundle contents: \(Bundle.main.bundlePath)")
-        print("Bundle resources: \(Bundle.main.urls(forResourcesWithExtension: ext, subdirectory: nil) ?? [])")
+        print("❌ Failed to find \(name).\(ext) in bundle")
         throw NSError(domain: "Seed", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing bundled JSON \(name).\(ext)"])
     }
     return try Data(contentsOf: url)
@@ -206,16 +192,13 @@ struct DecodableBook: Decodable {
             self.abbreviation = nil
         }
         self.testament = try container.decodeIfPresent(String.self, forKey: .testament)
-        // Try chapters as array of objects first
         if let chapterObjects = try? container.decode([DecodableChapter].self, forKey: .chapters) {
             self.chapters = chapterObjects
         } else if let chapterArrays = try? container.decode([[DecodableVerse]].self, forKey: .chapters) {
-            // Wrap arrays into chapter objects, using index+1 as chapter number
             self.chapters = chapterArrays.enumerated().map { (idx, verses) in
                 DecodableChapter(number: idx + 1, verses: verses)
             }
         } else if let chapterStringArrays = try? container.decode([[String]].self, forKey: .chapters) {
-            // Verses are plain strings; convert to numbered verses
             self.chapters = chapterStringArrays.enumerated().map { (cidx, verseStrings) in
                 let verses = verseStrings.enumerated().map { (vidx, text) in
                     DecodableVerse(number: vidx + 1, text: text)
@@ -242,4 +225,3 @@ struct DecodableVerse: Decodable {
     let number: Int
     let text: String
 }
-

@@ -6,9 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-/* End PBXBuildFile section */
-
 /* Begin PBXFileReference section */
 		CA7C46D32F214C2300FA46AA /* WrittenWord.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WrittenWord.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
