@@ -34,6 +34,10 @@ class ChapterViewModel_Optimized {
     var selectedText = ""
     var selectedRange: NSRange?
     var selectedHighlightColor: HighlightColor = .yellow
+
+    // Interlinear Word Lookup
+    var showInterlinearLookup = false
+    var selectedWord: Word?
     
     // Search with debouncing
     private var _searchText = ""
@@ -171,14 +175,25 @@ class ChapterViewModel_Optimized {
         selectedVerse = verse
         selectedRange = range
         selectedText = text
-        showHighlightMenu = true
+
+        // Check if this is a single word selection and if we have interlinear data
+        if let word = WordLookupService.findWord(in: verse, for: range) {
+            // Show interlinear lookup for single word
+            selectedWord = word
+            showInterlinearLookup = true
+        } else {
+            // Show highlight menu for multi-word selection or no interlinear data
+            showHighlightMenu = true
+        }
     }
     
     private func resetSelection() {
         showHighlightMenu = false
+        showInterlinearLookup = false
         selectedRange = nil
         selectedText = ""
         selectedVerse = nil
+        selectedWord = nil
     }
     
     private func invalidateFilteredVerses() {
