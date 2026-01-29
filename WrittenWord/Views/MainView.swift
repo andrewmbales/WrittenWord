@@ -30,9 +30,18 @@ struct MainView: View {
                             showingSearch = false
                         }
                 } else if let chapter = selectedChapter {
-                    ChapterView(chapter: chapter) { newChapter in
-                        selectedChapter = newChapter
-                    }
+                    ChapterView(
+                        chapter: chapter,
+                        onChapterChange: { newChapter in
+                            selectedChapter = newChapter
+                        },
+                        onVerseInteraction: {
+                            // Auto-collapse sidebar when user interacts with verses
+                            withAnimation {
+                                columnVisibility = .detailOnly
+                            }
+                        }
+                    )
                     .id(chapter.id)
                 } else {
                     emptyStateView
