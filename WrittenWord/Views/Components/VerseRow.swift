@@ -2,7 +2,10 @@
 //  VerseRow.swift
 //  WrittenWord
 //
-//  Individual verse display component with highlighting support
+//  FIXED: Proper verse display with text wrapping
+//  - Ensures text wraps at proper boundaries
+//  - Prevents descender clipping
+//  - Proper width constraint propagation
 //
 
 import SwiftUI
@@ -25,41 +28,40 @@ struct VerseRow: View {
     }
     
     var body: some View {
-        GeometryReader { geometry in
-            HStack(alignment: .top, spacing: 12) {
-                // Verse number with highlight indicator
-                VStack(spacing: 4) {
-                    Text("\(verse.number)")
-                        .font(.system(size: fontSize * 0.75, design: .rounded))
-                        .fontWeight(.medium)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28, alignment: .center)
+        HStack(alignment: .top, spacing: 12) {
+            // Verse number with highlight indicator
+            VStack(spacing: 4) {
+                Text("\(verse.number)")
+                    .font(.system(size: fontSize * 0.75, design: .rounded))
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, alignment: .center)
 
-                    // Small dot indicator if verse has highlights
-                    if !verseHighlights.isEmpty {
-                        Circle()
-                            .fill(Color.accentColor)
-                            .frame(width: 6, height: 6)
-                    }
+                // Small dot indicator if verse has highlights
+                if !verseHighlights.isEmpty {
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: 6, height: 6)
                 }
-                .frame(width: 28)
-
-                // Verse text with selection and highlighting
-                // Calculate available width: geometry width - verse number (28) - spacing (12)
-                ImprovedSelectableTextView(
-                    text: verse.text,
-                    highlights: verseHighlights,
-                    fontSize: fontSize,
-                    fontFamily: fontFamily,
-                    lineSpacing: lineSpacing,
-                    colorTheme: colorTheme,
-                    isAnnotationMode: isAnnotationMode,
-                    availableWidth: max(100, geometry.size.width - 40), // Minimum 100pt width
-                    onHighlight: onTextSelected
-                )
             }
+            .frame(width: 28)
+
+            // CRITICAL FIX: Use flexible frame instead of GeometryReader
+            // This allows proper width constraint while enabling wrapping
+            ImprovedSelectableTextView(
+                text: verse.text,
+                highlights: verseHighlights,
+                fontSize: fontSize,
+                fontFamily: fontFamily,
+                lineSpacing: lineSpacing,
+                colorTheme: colorTheme,
+                isAnnotationMode: isAnnotationMode,
+                availableWidth: UIScreen.main.bounds.width - 280, // Account for margins and verse number
+                onHighlight: onTextSelected
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .fixedSize(horizontal: false, vertical: true) // Size to fit content vertically
+        .padding(.vertical, max(4, lineSpacing / 3)) // Ensure minimum vertical padding
         .contentShape(Rectangle()) // Makes the entire row tappable
         .contextMenu {
             Button(action: onBookmark) {
@@ -84,6 +86,83 @@ struct VerseRow: View {
     }
 }
 
+// MARK: - Alternative Implementation with GeometryReader (if needed)
+struct VerseRowWithGeometry: View {
+    let verse: Verse
+    let fontSize: Double
+    let lineSpacing: Double
+    let fontFamily: FontFamily
+    let colorTheme: ColorTheme
+    let isAnnotationMode: Bool
+    let onTextSelected: (NSRange, String) -> Void
+    let onBookmark: () -> Void
+    
+    @Query private var allHighlights: [Highlight]
+    
+    var verseHighlights: [Highlight] {
+        allHighlights.filter { $0.verseId == verse.id }
+    }
+    
+    var body: some View {
+        // Use overlay to get width without affecting layout
+        HStack(alignment: .top, spacing: 12) {
+            // Verse number
+            VStack(spacing: 4) {
+                Text("\(verse.number)")
+                    .font(.system(size: fontSize * 0.75, design: .rounded))
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, alignment: .center)
+
+                if !verseHighlights.isEmpty {
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .frame(width: 28)
+
+            // Text view with proper width
+            GeometryReader { geometry in
+                ImprovedSelectableTextView(
+                    text: verse.text,
+                    highlights: verseHighlights,
+                    fontSize: fontSize,
+                    fontFamily: fontFamily,
+                    lineSpacing: lineSpacing,
+                    colorTheme: colorTheme,
+                    isAnnotationMode: isAnnotationMode,
+                    availableWidth: geometry.size.width,
+                    onHighlight: onTextSelected
+                )
+            }
+            // CRITICAL: Don't use fixedSize - let it size naturally
+        }
+        .padding(.vertical, max(4, lineSpacing / 3))
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button(action: onBookmark) {
+                Label("Bookmark Verse", systemImage: "bookmark")
+            }
+            
+            Button {
+                UIPasteboard.general.string = verse.text
+            } label: {
+                Label("Copy Text", systemImage: "doc.on.doc")
+            }
+            
+            if !verseHighlights.isEmpty {
+                Divider()
+                Button(role: .destructive) {
+                    // Delete highlights
+                } label: {
+                    Label("Remove Highlights", systemImage: "trash")
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Preview
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -95,7 +174,7 @@ struct VerseRow: View {
     
     let verse = Verse(
         number: 1,
-        text: "In the beginning God created the heaven and the earth."
+        text: "In the beginning God created the heaven and the earth. Testing descenders: gypqj"
     )
     container.mainContext.insert(verse)
     
@@ -109,20 +188,27 @@ struct VerseRow: View {
     )
     container.mainContext.insert(highlight)
     
-    return VerseRow(
-        verse: verse,
-        fontSize: 16,
-        lineSpacing: 6,
-        fontFamily: .system,
-        colorTheme: .system,
-        isAnnotationMode: false,
-        onTextSelected: { range, text in
-            print("Selected: \(text)")
-        },
-        onBookmark: {
-            print("Bookmark tapped")
-        }
-    )
+    return VStack(spacing: 20) {
+        Text("Testing with minimum line spacing:")
+            .font(.caption)
+        
+        VerseRow(
+            verse: verse,
+            fontSize: 16,
+            lineSpacing: 2, // Very tight spacing to test descender fix
+            fontFamily: .system,
+            colorTheme: .system,
+            isAnnotationMode: false,
+            onTextSelected: { range, text in
+                print("Selected: \(text)")
+            },
+            onBookmark: {
+                print("Bookmark tapped")
+            }
+        )
+        
+        Spacer()
+    }
     .modelContainer(container)
     .padding()
 }
