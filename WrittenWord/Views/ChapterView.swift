@@ -48,6 +48,11 @@ struct ChapterView: View {
     @State private var canvasView = PKCanvasView()
     @State private var drawing = PKDrawing()
 
+    // Long note state
+    @State private var showingNoteEditor = false
+    @State private var noteTitle = ""
+    @State private var noteContent = ""
+
     private var sortedVerses: [Verse] {
         chapter.verses.sorted { $0.number < $1.number }
     }
@@ -77,8 +82,8 @@ struct ChapterView: View {
                             }
                         )
                         .padding(.vertical, 4)
-                        .padding(.leading, notePosition == .left ? 120 : 20)
-                        .padding(.trailing, notePosition == .right ? 120 : 20)
+                        .padding(.leading, notePosition == .left ? 240 : 20)
+                        .padding(.trailing, notePosition == .right ? 240 : 20)
                         .background(
                             selectedVerses.contains(verse.id) ?
                             Color.accentColor.opacity(0.15) : Color.clear
@@ -117,6 +122,13 @@ struct ChapterView: View {
 
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: 16) {
+                    // Note button
+                    Button {
+                        showingNoteEditor = true
+                    } label: {
+                        Image(systemName: "note.text")
+                    }
+
                     if !isMultiSelectMode {
                         Button {
                             isMultiSelectMode = true
@@ -150,6 +162,9 @@ struct ChapterView: View {
             ColorPicker("Select Color", selection: $selectedColor)
                 .padding()
                 .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showingNoteEditor) {
+            noteEditorView
         }
         .safeAreaInset(edge: .bottom) {
             if selectedTool != .none {
@@ -293,13 +308,9 @@ struct ChapterView: View {
     }
 
     private func loadDrawing() {
-        if let note = chapterNote, let drawingData = note.drawing {
-            do {
-                drawing = try PKDrawing(data: drawingData.dataRepresentation())
-                canvasView.drawing = drawing
-            } catch {
-                print("Failed to load drawing: \(error)")
-            }
+        if let note = chapterNote, !note.drawing.strokes.isEmpty {
+            drawing = note.drawing
+            canvasView.drawing = drawing
         }
     }
 
@@ -312,7 +323,15 @@ struct ChapterView: View {
             note.drawing = drawing
         } else {
             // Create new note for chapter
-            let note = Note(chapter: chapter, drawing: drawing)
+            let note = Note(
+                title: "",
+                content: "",
+                drawing: drawing,
+                verseReference: "",
+                isMarginNote: false,
+                chapter: chapter,
+                verse: nil
+            )
             modelContext.insert(note)
         }
 
@@ -382,5 +401,65 @@ struct ChapterView: View {
         showMultiHighlightPalette = false
         isMultiSelectMode = false
         selectedVerses.removeAll()
+    }
+
+    private var noteEditorView: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                TextField("Note Title", text: $noteTitle)
+                    .font(.headline)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal)
+
+                TextEditor(text: $noteContent)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                    )
+                    .padding(.horizontal)
+
+                Spacer()
+            }
+            .padding(.top)
+            .navigationTitle("New Note")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        showingNoteEditor = false
+                        noteTitle = ""
+                        noteContent = ""
+                    }
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        saveNote()
+                    }
+                    .disabled(noteTitle.isEmpty && noteContent.isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+
+    private func saveNote() {
+        let note = Note(
+            title: noteTitle.isEmpty ? "Untitled Note" : noteTitle,
+            content: noteContent,
+            drawing: PKDrawing(),
+            verseReference: chapter.reference,
+            isMarginNote: false,
+            chapter: chapter,
+            verse: nil
+        )
+        modelContext.insert(note)
+        try? modelContext.save()
+
+        // Clean up
+        showingNoteEditor = false
+        noteTitle = ""
+        noteContent = ""
     }
 }
