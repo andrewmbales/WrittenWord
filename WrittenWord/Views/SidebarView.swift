@@ -45,7 +45,7 @@ struct SidebarView: View {
     
     var body: some View {
         List {
-            // Top navigation buttons
+            // Settings
             Section {
                 Button {
                     onNavigationAction?()
@@ -55,7 +55,19 @@ struct SidebarView: View {
                         .foregroundStyle(buttonColor)
                 }
                 .buttonStyle(.plain)
+            }
 
+            // Books of the Bible
+            Section("BOOKS OF THE BIBLE") {
+                if let selectedBook = selectedBook {
+                    chapterGridView(for: selectedBook)
+                } else {
+                    twoColumnBookLayout
+                }
+            }
+
+            // Study tools
+            Section("My Study") {
                 Button {
                     onNavigationAction?()
                     showingHighlights = true
@@ -83,19 +95,7 @@ struct SidebarView: View {
                         .foregroundStyle(buttonColor)
                 }
                 .buttonStyle(.plain)
-            }
-            
-            // Books of the Bible
-            Section("BOOKS OF THE BIBLE") {
-                if let selectedBook = selectedBook {
-                    chapterGridView(for: selectedBook)
-                } else {
-                    twoColumnBookLayout
-                }
-            }
-            
-            // Study tools
-            Section("My Study") {
+
                 Button {
                     onNavigationAction?()
                     showingBookmarks = true

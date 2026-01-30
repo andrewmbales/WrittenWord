@@ -19,6 +19,7 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
     let lineSpacing: Double
     let colorTheme: ColorTheme
     let isAnnotationMode: Bool
+    let availableWidth: CGFloat
     let onHighlight: (NSRange, String) -> Void
     
     func makeUIView(context: Context) -> UITextView {
@@ -30,14 +31,13 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
 
-        // CRITICAL: Let SwiftUI handle the width, but allow unlimited height
-        textView.textContainer.widthTracksTextView = true
+        // CRITICAL: Set explicit width for text container to enable wrapping
+        // Do NOT use widthTracksTextView - it causes circular dependency
+        textView.textContainer.size = CGSize(width: availableWidth, height: .greatestFiniteMagnitude)
         textView.textContainer.maximumNumberOfLines = 0
         textView.textContainer.lineBreakMode = .byWordWrapping
 
-        // Allow the text view to expand horizontally and compress as needed
-        textView.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        // Allow vertical expansion, but constrain horizontal
         textView.setContentHuggingPriority(.required, for: .vertical)
         textView.setContentCompressionResistancePriority(.required, for: .vertical)
 
@@ -60,6 +60,11 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: UITextView, context: Context) {
+        // Update container width if it changed
+        if uiView.textContainer.size.width != availableWidth {
+            uiView.textContainer.size = CGSize(width: availableWidth, height: .greatestFiniteMagnitude)
+        }
+
         // Build attributed string
         let attributedText = NSMutableAttributedString(string: text)
 
@@ -174,12 +179,12 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
 // MARK: - Preview Support
 #Preview {
     let verse = Verse(number: 1, text: "In the beginning God created the heaven and the earth.")
-    
+
     return VStack(alignment: .leading, spacing: 20) {
         Text("Try long-pressing or selecting text:")
             .font(.caption)
             .foregroundStyle(.secondary)
-        
+
         ImprovedSelectableTextView(
             text: verse.text,
             highlights: [],
@@ -188,11 +193,12 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
             lineSpacing: 6,
             colorTheme: .system,
             isAnnotationMode: false,
+            availableWidth: 300, // Preview width
             onHighlight: { range, text in
                 print("Selected: \(text) at range: \(range)")
             }
         )
-        
+
         Spacer()
     }
     .padding()

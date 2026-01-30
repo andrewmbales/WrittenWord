@@ -25,37 +25,41 @@ struct VerseRow: View {
     }
     
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            // Verse number with highlight indicator
-            VStack(spacing: 4) {
-                Text("\(verse.number)")
-                    .font(.system(size: fontSize * 0.75, design: .rounded))
-                    .fontWeight(.medium)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, alignment: .center)
-                
-                // Small dot indicator if verse has highlights
-                if !verseHighlights.isEmpty {
-                    Circle()
-                        .fill(Color.accentColor)
-                        .frame(width: 6, height: 6)
+        GeometryReader { geometry in
+            HStack(alignment: .top, spacing: 12) {
+                // Verse number with highlight indicator
+                VStack(spacing: 4) {
+                    Text("\(verse.number)")
+                        .font(.system(size: fontSize * 0.75, design: .rounded))
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28, alignment: .center)
+
+                    // Small dot indicator if verse has highlights
+                    if !verseHighlights.isEmpty {
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 6, height: 6)
+                    }
                 }
+                .frame(width: 28)
+
+                // Verse text with selection and highlighting
+                // Calculate available width: geometry width - verse number (28) - spacing (12)
+                ImprovedSelectableTextView(
+                    text: verse.text,
+                    highlights: verseHighlights,
+                    fontSize: fontSize,
+                    fontFamily: fontFamily,
+                    lineSpacing: lineSpacing,
+                    colorTheme: colorTheme,
+                    isAnnotationMode: isAnnotationMode,
+                    availableWidth: max(100, geometry.size.width - 40), // Minimum 100pt width
+                    onHighlight: onTextSelected
+                )
             }
-            .frame(width: 28)
-            
-            // Verse text with selection and highlighting
-            ImprovedSelectableTextView(
-                text: verse.text,
-                highlights: verseHighlights,
-                fontSize: fontSize,
-                fontFamily: fontFamily,
-                lineSpacing: lineSpacing,
-                colorTheme: colorTheme,
-                isAnnotationMode: isAnnotationMode,
-                onHighlight: onTextSelected
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .fixedSize(horizontal: false, vertical: true) // Size to fit content vertically
         .contentShape(Rectangle()) // Makes the entire row tappable
         .contextMenu {
             Button(action: onBookmark) {
