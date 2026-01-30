@@ -52,6 +52,9 @@ struct ChapterView: View {
     @State private var showingNoteEditor = false
     @State private var noteTitle = ""
     @State private var noteContent = ""
+    @State private var noteDrawing = PKDrawing()
+    @State private var isHandwrittenMode = false
+    @State private var noteCanvasView = PKCanvasView()
 
     private var sortedVerses: [Verse] {
         chapter.verses.sorted { $0.number < $1.number }
@@ -406,18 +409,39 @@ struct ChapterView: View {
     private var noteEditorView: some View {
         NavigationView {
             VStack(spacing: 20) {
+                // Title field
                 TextField("Note Title", text: $noteTitle)
                     .font(.headline)
                     .textFieldStyle(.roundedBorder)
                     .padding(.horizontal)
 
-                TextEditor(text: $noteContent)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                    )
-                    .padding(.horizontal)
+                // Mode toggle
+                Picker("Note Type", selection: $isHandwrittenMode) {
+                    Label("Typed", systemImage: "keyboard").tag(false)
+                    Label("Handwritten", systemImage: "pencil.tip.crop.circle").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+
+                // Content area
+                if isHandwrittenMode {
+                    // Handwritten canvas
+                    CanvasViewRepresentable(canvasView: $noteCanvasView, drawing: $noteDrawing)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                        )
+                        .padding(.horizontal)
+                } else {
+                    // Typed text editor
+                    TextEditor(text: $noteContent)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                        )
+                        .padding(.horizontal)
+                }
 
                 Spacer()
             }
@@ -427,9 +451,7 @@ struct ChapterView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
-                        showingNoteEditor = false
-                        noteTitle = ""
-                        noteContent = ""
+                        clearNoteEditor()
                     }
                 }
 
@@ -437,18 +459,27 @@ struct ChapterView: View {
                     Button("Save") {
                         saveNote()
                     }
-                    .disabled(noteTitle.isEmpty && noteContent.isEmpty)
+                    .disabled(noteTitle.isEmpty && noteContent.isEmpty && noteDrawing.bounds.isEmpty)
                 }
             }
         }
         .presentationDetents([.large])
     }
 
+    private func clearNoteEditor() {
+        showingNoteEditor = false
+        noteTitle = ""
+        noteContent = ""
+        noteDrawing = PKDrawing()
+        noteCanvasView.drawing = PKDrawing()
+        isHandwrittenMode = false
+    }
+
     private func saveNote() {
         let note = Note(
             title: noteTitle.isEmpty ? "Untitled Note" : noteTitle,
-            content: noteContent,
-            drawing: PKDrawing(),
+            content: isHandwrittenMode ? "" : noteContent,
+            drawing: isHandwrittenMode ? noteDrawing : PKDrawing(),
             verseReference: chapter.reference,
             isMarginNote: false,
             chapter: chapter,
@@ -458,8 +489,41 @@ struct ChapterView: View {
         try? modelContext.save()
 
         // Clean up
-        showingNoteEditor = false
-        noteTitle = ""
-        noteContent = ""
+        clearNoteEditor()
+    }
+}
+
+// MARK: - Canvas View Representable for Note Editor
+struct CanvasViewRepresentable: UIViewRepresentable {
+    @Binding var canvasView: PKCanvasView
+    @Binding var drawing: PKDrawing
+
+    func makeUIView(context: Context) -> PKCanvasView {
+        canvasView.drawing = drawing
+        canvasView.drawingPolicy = .anyInput
+        canvasView.backgroundColor = .clear
+        canvasView.isOpaque = false
+        canvasView.delegate = context.coordinator
+        return canvasView
+    }
+
+    func updateUIView(_ uiView: PKCanvasView, context: Context) {
+        uiView.drawing = drawing
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, PKCanvasViewDelegate {
+        var parent: CanvasViewRepresentable
+
+        init(_ parent: CanvasViewRepresentable) {
+            self.parent = parent
+        }
+
+        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            parent.drawing = canvasView.drawing
+        }
     }
 }

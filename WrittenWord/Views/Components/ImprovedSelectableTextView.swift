@@ -17,6 +17,7 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
     let fontSize: Double
     let fontFamily: FontFamily
     let lineSpacing: Double
+    let colorTheme: ColorTheme
     let isAnnotationMode: Bool
     let onHighlight: (NSRange, String) -> Void
     
@@ -28,16 +29,17 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
         textView.backgroundColor = .clear
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
+        textView.textContainer.lineBreakMode = .byWordWrapping
         textView.textContainer.widthTracksTextView = true
         textView.textContainer.heightTracksTextView = false
         textView.setContentHuggingPriority(.defaultHigh, for: .vertical)
         textView.setContentCompressionResistancePriority(.defaultHigh, for: .vertical)
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        
+
         // FIXED: Enable text selection with better UX
         textView.isSelectable = true
         textView.isUserInteractionEnabled = true
-        
+
         // Add long press gesture for highlight menu
         let longPress = UILongPressGestureRecognizer(
             target: context.coordinator,
@@ -45,27 +47,29 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
         )
         longPress.minimumPressDuration = 0.3
         textView.addGestureRecognizer(longPress)
-        
+
         // Customize selection appearance
         textView.tintColor = UIColor.systemBlue
-        
+
         return textView
     }
     
     func updateUIView(_ uiView: UITextView, context: Context) {
         let attributedText = NSMutableAttributedString(string: text)
-        
+
         // Set base font and spacing
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = lineSpacing
-        
+        paragraphStyle.lineBreakMode = .byWordWrapping
+
         let baseAttributes: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: fontSize),
-            .paragraphStyle: paragraphStyle
+            .paragraphStyle: paragraphStyle,
+            .foregroundColor: UIColor(colorTheme.textColor)
         ]
-        
+
         attributedText.addAttributes(baseAttributes, range: NSRange(location: 0, length: attributedText.length))
-        
+
         // Apply highlights with rounded rectangle background
         for highlight in highlights {
             let range = NSRange(location: highlight.startIndex, length: highlight.endIndex - highlight.startIndex)
@@ -77,15 +81,18 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
                 )
             }
         }
-        
+
         uiView.attributedText = attributedText
-        
+
         // FIXED: Disable interaction when in annotation mode to prevent conflicts
         uiView.isUserInteractionEnabled = !isAnnotationMode
-        
-        // Force layout to calculate proper size
+
+        // Force layout recalculation
+        uiView.textContainer.lineBreakMode = .byWordWrapping
+        uiView.invalidateIntrinsicContentSize()
         uiView.setNeedsLayout()
         uiView.layoutIfNeeded()
+        uiView.setNeedsDisplay()
     }
     
     func makeCoordinator() -> Coordinator {
@@ -178,6 +185,7 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
             fontSize: 16,
             fontFamily: .system,
             lineSpacing: 6,
+            colorTheme: .system,
             isAnnotationMode: false,
             onHighlight: { range, text in
                 print("Selected: \(text) at range: \(range)")
