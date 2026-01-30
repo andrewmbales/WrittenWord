@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct HighlightPalette: View {
     @Binding var selectedColor: HighlightColor

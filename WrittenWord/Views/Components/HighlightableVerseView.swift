@@ -187,10 +187,10 @@ struct SelectableTextView: UIViewRepresentable {
         Highlight.self,
         configurations: config
     )
-    
+
     let verse = Verse(number: 1, text: "In the beginning God created the heaven and the earth.")
     container.mainContext.insert(verse)
-    
+
     let highlight = Highlight(
         verseId: verse.id,
         startIndex: 17,
@@ -200,8 +200,8 @@ struct SelectableTextView: UIViewRepresentable {
         verse: verse
     )
     container.mainContext.insert(highlight)
-    
-    return HighlightableVerseView(
+
+    HighlightableVerseView(
         verse: verse,
         selectedText: .constant(""),
         selectedRange: .constant(nil),
