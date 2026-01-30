@@ -12,7 +12,8 @@ struct SidebarView: View {
     @Query(sort: \Book.order) private var books: [Book]
     @Binding var selectedChapter: Chapter?
     @Binding var showingSearch: Bool
-    
+    var onNavigationAction: (() -> Void)? = nil
+
     @State private var selectedBook: Book?
     @State private var showingSettings = false
     @State private var showingNotebook = false
@@ -33,35 +34,39 @@ struct SidebarView: View {
             // Top navigation buttons
             Section {
                 Button {
+                    onNavigationAction?()
                     showingSettings = true
                 } label: {
                     Label("Settings", systemImage: "gear")
                         .foregroundStyle(.gray)
                 }
                 .buttonStyle(.plain)
-                
+
                 Button {
+                    onNavigationAction?()
                     showingHighlights = true
                 } label: {
                     Label("Highlights", systemImage: "highlighter")
-                        .foregroundStyle(.yellow)
+                        .foregroundStyle(.gray)
                 }
                 .buttonStyle(.plain)
-                
+
                 Button {
+                    onNavigationAction?()
                     showingNotebook = true
                 } label: {
                     Label("Notes", systemImage: "note.text")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.gray)
                 }
                 .buttonStyle(.plain)
-                
+
                 Button {
+                    onNavigationAction?()
                     selectedChapter = nil
                     showingSearch = true
                 } label: {
                     Label("Search", systemImage: "magnifyingglass")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.gray)
                 }
                 .buttonStyle(.plain)
             }
@@ -78,18 +83,20 @@ struct SidebarView: View {
             // Study tools
             Section("My Study") {
                 Button {
+                    onNavigationAction?()
                     showingBookmarks = true
                 } label: {
                     Label("Bookmarks", systemImage: "bookmark.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.gray)
                 }
                 .buttonStyle(.plain)
-                
+
                 Button {
+                    onNavigationAction?()
                     showingStats = true
                 } label: {
                     Label("Statistics", systemImage: "chart.bar.fill")
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(.gray)
                 }
                 .buttonStyle(.plain)
             }

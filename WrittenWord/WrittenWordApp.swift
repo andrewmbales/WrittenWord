@@ -148,8 +148,8 @@ func seedDataIfNeeded(container: ModelContainer) async {
         try modelContext.save()
         print("✅ Seeding complete!")
 
-        // Seed sample interlinear data for John 1:1 as a demonstration
-        print("📖 Seeding sample interlinear data for John 1:1...")
+        // Seed sample interlinear data for John 1:1-5 as a demonstration
+        print("📖 Seeding sample interlinear data for John 1:1-5...")
         try await seedSampleInterlinearData(modelContext: modelContext)
 
         didSeedData = true
@@ -173,8 +173,7 @@ func loadBundledJSON(named name: String, withExtension ext: String) throws -> Da
 
 @MainActor
 func seedSampleInterlinearData(modelContext: ModelContext) async throws {
-    // Find John 1:1 verse
-    // First find the book of John (should be the 4th gospel, order = 43)
+    // Find the book of John
     let bookFetch = FetchDescriptor<Book>(
         predicate: #Predicate<Book> { book in
             book.name == "John"
@@ -191,58 +190,105 @@ func seedSampleInterlinearData(modelContext: ModelContext) async throws {
         return
     }
 
-    // Find verse 1
-    guard let verse1 = chapter1.verses.first(where: { $0.number == 1 }) else {
-        print("⚠️ John 1:1 not found, skipping interlinear data")
-        return
+    var totalWords = 0
+
+    // Seed verse 1
+    if let verse1 = chapter1.verses.first(where: { $0.number == 1 }) {
+        print("📝 Seeding John 1:1: \(verse1.text)")
+        // John 1:1 KJV: "In the beginning was the Word, and the Word was with God, and the Word was God."
+        let words1: [(String, String, String, String, String, Int, Int, Int, String)] = [
+            ("Ἐν", "en", "G1722", "in", "Preposition", 0, 0, 2, "In"),
+            ("ἀρχῇ", "archē", "G746", "beginning", "Noun - Dative Feminine Singular", 1, 3, 6, "the"),
+            ("ἦν", "ēn", "G1510", "was", "Verb - Imperfect Indicative Active - 3rd Person Singular", 2, 7, 10, "beginning"),
+            ("ὁ", "ho", "G3588", "the", "Article - Nominative Masculine Singular", 3, 11, 14, "was"),
+            ("λόγος", "logos", "G3056", "Word", "Noun - Nominative Masculine Singular", 4, 15, 19, "the Word"),
+        ]
+        for w in words1 {
+            let word = Word(originalText: w.0, transliteration: w.1, strongsNumber: w.2, gloss: w.3, morphology: w.4, wordIndex: w.5, startPosition: w.6, endPosition: w.7, translatedText: w.8, language: "grk", verse: verse1)
+            modelContext.insert(word)
+            verse1.words.append(word)
+        }
+        totalWords += words1.count
     }
 
-    print("📝 Found John 1:1: \(verse1.text)")
+    // Seed verse 2
+    if let verse2 = chapter1.verses.first(where: { $0.number == 2 }) {
+        print("📝 Seeding John 1:2: \(verse2.text)")
+        // John 1:2 KJV: "The same was in the beginning with God."
+        let words2: [(String, String, String, String, String, Int, Int, Int, String)] = [
+            ("οὗτος", "houtos", "G3778", "this one", "Demonstrative Pronoun - Nominative Masculine Singular", 0, 0, 3, "The same"),
+            ("ἦν", "ēn", "G1510", "was", "Verb - Imperfect Indicative Active - 3rd Person Singular", 1, 4, 7, "was"),
+            ("ἐν", "en", "G1722", "in", "Preposition", 2, 8, 10, "in"),
+            ("ἀρχῇ", "archē", "G746", "beginning", "Noun - Dative Feminine Singular", 3, 11, 14, "the beginning"),
+            ("πρὸς", "pros", "G4314", "with", "Preposition", 4, 15, 19, "with"),
+            ("θεόν", "theon", "G2316", "God", "Noun - Accusative Masculine Singular", 5, 20, 23, "God"),
+        ]
+        for w in words2 {
+            let word = Word(originalText: w.0, transliteration: w.1, strongsNumber: w.2, gloss: w.3, morphology: w.4, wordIndex: w.5, startPosition: w.6, endPosition: w.7, translatedText: w.8, language: "grk", verse: verse2)
+            modelContext.insert(word)
+            verse2.words.append(word)
+        }
+        totalWords += words2.count
+    }
 
-    // John 1:1 KJV: "In the beginning was the Word, and the Word was with God, and the Word was God."
-    // Greek: "Ἐν ἀρχῇ ἦν ὁ λόγος, καὶ ὁ λόγος ἦν πρὸς τὸν θεόν, καὶ θεὸς ἦν ὁ λόγος."
+    // Seed verse 3
+    if let verse3 = chapter1.verses.first(where: { $0.number == 3 }) {
+        print("📝 Seeding John 1:3: \(verse3.text)")
+        // John 1:3 KJV: "All things were made by him; and without him was not any thing made that was made."
+        let words3: [(String, String, String, String, String, Int, Int, Int, String)] = [
+            ("πάντα", "panta", "G3956", "all things", "Adjective - Nominative Neuter Plural", 0, 0, 3, "All things"),
+            ("δι'", "di", "G1223", "through", "Preposition", 1, 4, 8, "by"),
+            ("αὐτοῦ", "autou", "G846", "him", "Personal Pronoun - Genitive Masculine 3rd Person Singular", 2, 9, 13, "him"),
+            ("ἐγένετο", "egeneto", "G1096", "came into being", "Verb - Aorist Indicative Middle - 3rd Person Singular", 3, 14, 18, "were made"),
+        ]
+        for w in words3 {
+            let word = Word(originalText: w.0, transliteration: w.1, strongsNumber: w.2, gloss: w.3, morphology: w.4, wordIndex: w.5, startPosition: w.6, endPosition: w.7, translatedText: w.8, language: "grk", verse: verse3)
+            modelContext.insert(word)
+            verse3.words.append(word)
+        }
+        totalWords += words3.count
+    }
 
-    // Create interlinear word mappings
-    let sampleWords: [(originalText: String, transliteration: String, strongs: String, gloss: String, morphology: String, wordIndex: Int, start: Int, end: Int, translated: String)] = [
-        ("Ἐν", "en", "G1722", "in", "Preposition", 0, 0, 2, "In"),
-        ("ἀρχῇ", "archē", "G746", "beginning", "Noun - Dative Feminine Singular", 1, 3, 6, "the"),
-        ("ἦν", "ēn", "G1510", "was", "Verb - Imperfect Indicative Active - 3rd Person Singular", 2, 7, 10, "beginning"),
-        ("ὁ", "ho", "G3588", "the", "Article - Nominative Masculine Singular", 3, 11, 14, "was"),
-        ("λόγος", "logos", "G3056", "Word", "Noun - Nominative Masculine Singular", 4, 15, 19, "the Word"),
-        ("καὶ", "kai", "G2532", "and", "Conjunction", 5, 19, 20, ","),
-        ("ὁ", "ho", "G3588", "the", "Article - Nominative Masculine Singular", 6, 21, 24, "and"),
-        ("λόγος", "logos", "G3056", "Word", "Noun - Nominative Masculine Singular", 7, 25, 29, "the Word"),
-        ("ἦν", "ēn", "G1510", "was", "Verb - Imperfect Indicative Active - 3rd Person Singular", 8, 30, 33, "was"),
-        ("πρὸς", "pros", "G4314", "with", "Preposition", 9, 34, 38, "with"),
-        ("τὸν", "ton", "G3588", "the", "Article - Accusative Masculine Singular", 10, 39, 42, ""),
-        ("θεόν", "theon", "G2316", "God", "Noun - Accusative Masculine Singular", 11, 43, 46, "God"),
-        ("καὶ", "kai", "G2532", "and", "Conjunction", 12, 46, 47, ","),
-        ("θεὸς", "theos", "G2316", "God", "Noun - Nominative Masculine Singular", 13, 48, 51, "and"),
-        ("ἦν", "ēn", "G1510", "was", "Verb - Imperfect Indicative Active - 3rd Person Singular", 14, 52, 55, "the Word"),
-        ("ὁ", "ho", "G3588", "the", "Article - Nominative Masculine Singular", 15, 56, 59, "was"),
-        ("λόγος", "logos", "G3056", "Word", "Noun - Nominative Masculine Singular", 16, 60, 64, "God"),
-    ]
+    // Seed verse 4
+    if let verse4 = chapter1.verses.first(where: { $0.number == 4 }) {
+        print("📝 Seeding John 1:4: \(verse4.text)")
+        // John 1:4 KJV: "In him was life; and the life was the light of men."
+        let words4: [(String, String, String, String, String, Int, Int, Int, String)] = [
+            ("ἐν", "en", "G1722", "in", "Preposition", 0, 0, 2, "In"),
+            ("αὐτῷ", "autō", "G846", "him", "Personal Pronoun - Dative Masculine 3rd Person Singular", 1, 3, 6, "him"),
+            ("ζωὴ", "zōē", "G2222", "life", "Noun - Nominative Feminine Singular", 2, 7, 10, "was life"),
+            ("ἦν", "ēn", "G1510", "was", "Verb - Imperfect Indicative Active - 3rd Person Singular", 3, 10, 11, ";"),
+            ("φῶς", "phōs", "G5457", "light", "Noun - Nominative Neuter Singular", 4, 12, 15, "the light"),
+        ]
+        for w in words4 {
+            let word = Word(originalText: w.0, transliteration: w.1, strongsNumber: w.2, gloss: w.3, morphology: w.4, wordIndex: w.5, startPosition: w.6, endPosition: w.7, translatedText: w.8, language: "grk", verse: verse4)
+            modelContext.insert(word)
+            verse4.words.append(word)
+        }
+        totalWords += words4.count
+    }
 
-    for wordData in sampleWords {
-        let word = Word(
-            originalText: wordData.originalText,
-            transliteration: wordData.transliteration,
-            strongsNumber: wordData.strongs,
-            gloss: wordData.gloss,
-            morphology: wordData.morphology,
-            wordIndex: wordData.wordIndex,
-            startPosition: wordData.start,
-            endPosition: wordData.end,
-            translatedText: wordData.translated,
-            language: "grk",
-            verse: verse1
-        )
-        modelContext.insert(word)
-        verse1.words.append(word)
+    // Seed verse 5
+    if let verse5 = chapter1.verses.first(where: { $0.number == 5 }) {
+        print("📝 Seeding John 1:5: \(verse5.text)")
+        // John 1:5 KJV: "And the light shineth in darkness; and the darkness comprehended it not."
+        let words5: [(String, String, String, String, String, Int, Int, Int, String)] = [
+            ("καὶ", "kai", "G2532", "and", "Conjunction", 0, 0, 3, "And"),
+            ("τὸ", "to", "G3588", "the", "Article - Nominative Neuter Singular", 1, 4, 7, "the"),
+            ("φῶς", "phōs", "G5457", "light", "Noun - Nominative Neuter Singular", 2, 8, 13, "light"),
+            ("φαίνει", "phainei", "G5316", "shines", "Verb - Present Indicative Active - 3rd Person Singular", 3, 14, 21, "shineth"),
+            ("σκοτίᾳ", "skotia", "G4653", "darkness", "Noun - Dative Feminine Singular", 4, 22, 24, "in darkness"),
+        ]
+        for w in words5 {
+            let word = Word(originalText: w.0, transliteration: w.1, strongsNumber: w.2, gloss: w.3, morphology: w.4, wordIndex: w.5, startPosition: w.6, endPosition: w.7, translatedText: w.8, language: "grk", verse: verse5)
+            modelContext.insert(word)
+            verse5.words.append(word)
+        }
+        totalWords += words5.count
     }
 
     try modelContext.save()
-    print("✅ Sample interlinear data seeded for John 1:1 (\(sampleWords.count) words)")
+    print("✅ Sample interlinear data seeded for John 1:1-5 (\(totalWords) total words)")
 }
 
 // MARK: - Decoding models matching the bundled JSON

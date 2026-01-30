@@ -18,7 +18,13 @@ struct MainView: View {
             // Sidebar
             SidebarView(
                 selectedChapter: $selectedChapter,
-                showingSearch: $showingSearch
+                showingSearch: $showingSearch,
+                onNavigationAction: {
+                    // Auto-collapse sidebar when navigation buttons are tapped
+                    withAnimation {
+                        columnVisibility = .detailOnly
+                    }
+                }
             )
             .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
         } detail: {
@@ -52,9 +58,12 @@ struct MainView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .onChange(of: selectedChapter) { _, newValue in
-            // When selecting a chapter, hide search
+            // When selecting a chapter, hide search and collapse sidebar
             if newValue != nil {
                 showingSearch = false
+                withAnimation {
+                    columnVisibility = .detailOnly
+                }
             }
         }
     }
