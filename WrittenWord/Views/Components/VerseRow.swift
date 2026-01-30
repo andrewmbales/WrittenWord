@@ -23,6 +23,7 @@ struct VerseRow: View {
     let onBookmark: () -> Void
     let onWordTapped: ((Word) -> Void)?
 
+    @Environment(\.modelContext) private var modelContext
     @Query private var allHighlights: [Highlight]
 
     var verseHighlights: [Highlight] {
@@ -96,12 +97,19 @@ struct VerseRow: View {
             if !verseHighlights.isEmpty {
                 Divider()
                 Button(role: .destructive) {
-                    // This would delete highlights - implement in view model
+                    removeAllHighlights()
                 } label: {
-                    Label("Remove Highlights", systemImage: "trash")
+                    Label("Remove All Highlights", systemImage: "trash")
                 }
             }
         }
+    }
+
+    private func removeAllHighlights() {
+        for highlight in verseHighlights {
+            modelContext.delete(highlight)
+        }
+        try? modelContext.save()
     }
 }
 
