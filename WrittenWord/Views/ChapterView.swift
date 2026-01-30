@@ -32,6 +32,10 @@ struct ChapterView: View {
     @State private var selectedRange: NSRange?
     @State private var selectionDebounceTask: Task<Void, Never>?
 
+    // State for interlinear bottom sheet (lexicon-style word lookup)
+    @State private var showInterlinearBottomSheet = false
+    @State private var lexiconEntry: LexiconEntry?
+
     // State for search
     @State private var showSearch = false
     @State private var searchText = ""
@@ -163,6 +167,9 @@ struct ChapterView: View {
         .sheet(isPresented: $showUnifiedSelectionMenu) {
             unifiedSelectionMenuView
         }
+        .sheet(isPresented: $showInterlinearBottomSheet) {
+            interlinearBottomSheetView
+        }
         .sheet(isPresented: $showSearch) {
             searchView
         }
@@ -238,6 +245,30 @@ struct ChapterView: View {
         .presentationDetents([.medium, .large])
     }
 
+    private var interlinearBottomSheetView: some View {
+        Group {
+            if let word = selectedWord, let entry = lexiconEntry {
+                InterlinearBottomSheet(
+                    word: word,
+                    lexiconEntry: entry,
+                    onCopy: {
+                        copyWordToClipboard()
+                    },
+                    onAddNote: {
+                        openNoteEditorForWord()
+                    },
+                    onHighlight: {
+                        openHighlightMenuForWord()
+                    },
+                    onNavigateToVerse: { verseRef in
+                        navigateToVerse(verseRef)
+                    }
+                )
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
     private var searchView: some View {
         NavigationView {
             VStack(spacing: 20) {
@@ -298,8 +329,15 @@ struct ChapterView: View {
                     // Check if we have interlinear data for this word
                     selectedWord = WordLookupService.findWord(in: verse, for: range)
 
-                    // Show unified selection menu (with or without interlinear data)
-                    showUnifiedSelectionMenu = true
+                    // If we have a single word with interlinear data, show the lexicon-style bottom sheet
+                    if let word = selectedWord {
+                        let lexiconService = LexiconService(modelContext: modelContext)
+                        lexiconEntry = lexiconService.getLexiconEntry(for: word)
+                        showInterlinearBottomSheet = true
+                    } else {
+                        // Show unified selection menu for multi-word selections or no interlinear data
+                        showUnifiedSelectionMenu = true
+                    }
                 }
             } catch {
                 // Task was cancelled, do nothing
@@ -624,6 +662,75 @@ struct ChapterView: View {
 
         // Clean up
         clearNoteEditor()
+    }
+
+    // MARK: - InterlinearBottomSheet Action Handlers
+
+    private func copyWordToClipboard() {
+        guard let word = selectedWord else { return }
+
+        let copyText = """
+        \(word.originalText) (\(word.transliteration))
+        \(word.gloss)
+        """
+
+        UIPasteboard.general.string = copyText
+    }
+
+    private func openNoteEditorForWord() {
+        guard let word = selectedWord else { return }
+
+        // Pre-populate note title with word info
+        noteTitle = "\(word.originalText) (\(word.transliteration))"
+        noteContent = "Word: \(word.originalText)\nMeaning: \(word.gloss)\n\n"
+
+        showInterlinearBottomSheet = false
+        showingNoteEditor = true
+    }
+
+    private func openHighlightMenuForWord() {
+        // Close the interlinear sheet and show the unified selection menu for highlighting
+        showInterlinearBottomSheet = false
+        showUnifiedSelectionMenu = true
+    }
+
+    private func navigateToVerse(_ verseRef: VerseReference) {
+        // Find the book, chapter, and verse to navigate to
+        let bookName = verseRef.fullBookName
+        let chapterNumber = verseRef.chapter
+        let verseNumber = verseRef.verse
+
+        // Fetch the book
+        let bookDescriptor = FetchDescriptor<Book>(
+            predicate: #Predicate { book in
+                book.name == bookName
+            }
+        )
+
+        do {
+            let books = try modelContext.fetch(bookDescriptor)
+            guard let book = books.first else {
+                print("Book not found: \(bookName)")
+                return
+            }
+
+            // Find the chapter
+            guard let targetChapter = book.chapters.first(where: { $0.number == chapterNumber }) else {
+                print("Chapter not found: \(chapterNumber)")
+                return
+            }
+
+            // Close the bottom sheet
+            showInterlinearBottomSheet = false
+
+            // Navigate to the chapter
+            onChapterChange(targetChapter)
+
+            // Note: Scrolling to a specific verse would require additional implementation
+            // with ScrollViewReader and verse IDs
+        } catch {
+            print("Error fetching book: \(error)")
+        }
     }
 }
 
