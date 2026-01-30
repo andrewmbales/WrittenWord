@@ -17,11 +17,10 @@ struct VerseRow: View {
     let lineSpacing: Double
     let fontFamily: FontFamily
     let colorTheme: ColorTheme
+    let notePosition: NotePosition
     let isAnnotationMode: Bool
-    let isInlineInterlinearMode: Bool
     let onTextSelected: (NSRange, String) -> Void
     let onBookmark: () -> Void
-    let onWordTapped: ((Word) -> Void)?
 
     @Environment(\.modelContext) private var modelContext
     @Query private var allHighlights: [Highlight]
@@ -31,42 +30,26 @@ struct VerseRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            // Verse number with highlight indicator
-            VStack(spacing: 4) {
-                Text("\(verse.number)")
-                    .font(.system(size: fontSize * 0.75, design: .rounded))
-                    .fontWeight(.medium)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, alignment: .center)
+        GeometryReader { geometry in
+            HStack(alignment: .top, spacing: 12) {
+                // Verse number with highlight indicator
+                VStack(spacing: 4) {
+                    Text("\(verse.number)")
+                        .font(.system(size: fontSize * 0.75, design: .rounded))
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28, alignment: .center)
 
-                // Small dot indicator if verse has highlights
-                if !verseHighlights.isEmpty {
-                    Circle()
-                        .fill(Color.accentColor)
-                        .frame(width: 6, height: 6)
-                }
-            }
-            .frame(width: 28)
-
-            // Conditional display based on inline mode
-            if isInlineInterlinearMode && !verse.words.isEmpty {
-                // Show inline interlinear view
-                InlineInterlinearView(
-                    verse: verse,
-                    fontSize: fontSize,
-                    lineSpacing: lineSpacing,
-                    fontFamily: fontFamily,
-                    colorTheme: colorTheme,
-                    onWordTapped: { word in
-                        onWordTapped?(word)
+                    // Small dot indicator if verse has highlights
+                    if !verseHighlights.isEmpty {
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 6, height: 6)
                     }
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                // Show regular text view
-                // CRITICAL FIX: Use flexible frame instead of GeometryReader
-                // This allows proper width constraint while enabling wrapping
+                }
+                .frame(width: 28)
+
+                // Text view with dynamic width calculation
                 ImprovedSelectableTextView(
                     text: verse.text,
                     highlights: verseHighlights,
@@ -75,14 +58,13 @@ struct VerseRow: View {
                     lineSpacing: lineSpacing,
                     colorTheme: colorTheme,
                     isAnnotationMode: isAnnotationMode,
-                    availableWidth: UIScreen.main.bounds.width - 280, // Account for margins and verse number
+                    availableWidth: calculateAvailableWidth(geometry: geometry),
                     onHighlight: onTextSelected
                 )
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(.vertical, max(4, lineSpacing / 3)) // Ensure minimum vertical padding
-        .contentShape(Rectangle()) // Makes the entire row tappable
+        .padding(.vertical, max(4, lineSpacing / 3))
+        .contentShape(Rectangle())
         .contextMenu {
             Button(action: onBookmark) {
                 Label("Bookmark Verse", systemImage: "bookmark")
@@ -103,6 +85,19 @@ struct VerseRow: View {
                 }
             }
         }
+    }
+
+    private func calculateAvailableWidth(geometry: GeometryProxy) -> CGFloat {
+        // Start with the full width
+        var width = geometry.size.width
+
+        // Subtract verse number and spacing
+        width -= 28 + 12
+
+        // Note: padding is already accounted for in the LazyVStack padding in ChapterView
+        // No need to subtract it here
+
+        return max(width, 100) // Ensure minimum width
     }
 
     private func removeAllHighlights() {
@@ -225,16 +220,13 @@ struct VerseRowWithGeometry: View {
             lineSpacing: 2, // Very tight spacing to test descender fix
             fontFamily: .system,
             colorTheme: .system,
+            notePosition: .right,
             isAnnotationMode: false,
-            isInlineInterlinearMode: false,
             onTextSelected: { range, text in
                 print("Selected: \(text)")
             },
             onBookmark: {
                 print("Bookmark tapped")
-            },
-            onWordTapped: { word in
-                print("Word tapped: \(word.translatedText)")
             }
         )
         
