@@ -29,7 +29,7 @@ struct HighlightPalette: View {
             
             Button("Cancel", action: onDismiss)
                 .font(.subheadline)
-                .foregroundStyle(.red)
+                .foregroundStyle(.gray)
         }
         .padding(.horizontal)
         .padding(.vertical, 12)

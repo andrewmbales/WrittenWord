@@ -287,7 +287,7 @@ struct BookmarkRow: View {
                     if bookmark.isPinned {
                         Image(systemName: "pin.fill")
                             .font(.caption2)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.gray)
                     }
                     
                     Spacer()
