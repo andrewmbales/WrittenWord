@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct InterlinearBottomSheet: View {
     let word: Word
@@ -399,7 +400,7 @@ struct FlowLayout: Layout {
         source: "Abbott-Smith. A Manual Greek Lexicon of the New Testament. Sourced from Tyndale House, Cambridge."
     )
 
-    return InterlinearBottomSheet(
+    InterlinearBottomSheet(
         word: word,
         lexiconEntry: entry,
         onCopy: { print("Copy") },

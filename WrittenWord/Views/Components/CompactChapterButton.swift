@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct CompactChapterButton: View {
     let chapter: Chapter
@@ -34,8 +35,8 @@ struct CompactChapterButton: View {
 // MARK: - Preview
 #Preview {
     let chapter = Chapter(number: 1, book: nil)
-    
-    return VStack(spacing: 16) {
+
+    VStack(spacing: 16) {
         Text("Normal state:")
         CompactChapterButton(
             chapter: chapter,
@@ -43,7 +44,7 @@ struct CompactChapterButton: View {
         ) {
             print("Tapped chapter 1")
         }
-        
+
         Text("Selected state:")
         CompactChapterButton(
             chapter: chapter,
