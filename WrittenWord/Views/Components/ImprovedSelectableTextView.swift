@@ -2,10 +2,10 @@
 //  ImprovedSelectableTextView.swift
 //  WrittenWord
 //
-//  FIXED: Better text selection for highlighting
-//  - Long press shows highlight menu immediately
-//  - Better visual feedback during selection
-//  - Smooth interaction with annotation mode
+//  FIXED: Proper text rendering with descender support and wrapping
+//  - Prevents "g" and other descenders from being cut off
+//  - Ensures text wraps properly at container boundaries
+//  - Maintains smooth interaction with annotation mode
 //
 
 import SwiftUI
@@ -28,18 +28,32 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
         textView.isEditable = false
         textView.isScrollEnabled = false
         textView.backgroundColor = .clear
-        textView.textContainerInset = .zero
+        
+        // CRITICAL FIX: Add vertical insets to prevent descender clipping
+        // Horizontal insets stay at 0, but we need vertical space for descenders
+        let verticalInset: CGFloat = 4 // Extra space for descenders
+        textView.textContainerInset = UIEdgeInsets(
+            top: verticalInset,
+            left: 0,
+            bottom: verticalInset,
+            right: 0
+        )
         textView.textContainer.lineFragmentPadding = 0
 
-        // CRITICAL: Set explicit width for text container to enable wrapping
-        // Do NOT use widthTracksTextView - it causes circular dependency
-        textView.textContainer.size = CGSize(width: availableWidth, height: .greatestFiniteMagnitude)
+        // CRITICAL FIX: Properly configure text container for wrapping
+        // Set the width constraint BEFORE any other operations
+        textView.textContainer.widthTracksTextView = false  // Don't track - use explicit width
+        textView.textContainer.size = CGSize(
+            width: availableWidth,
+            height: CGFloat.greatestFiniteMagnitude
+        )
         textView.textContainer.maximumNumberOfLines = 0
         textView.textContainer.lineBreakMode = .byWordWrapping
 
         // Allow vertical expansion, but constrain horizontal
         textView.setContentHuggingPriority(.required, for: .vertical)
         textView.setContentCompressionResistancePriority(.required, for: .vertical)
+        textView.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         // Enable text selection
         textView.isSelectable = true
@@ -62,28 +76,48 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
     func updateUIView(_ uiView: UITextView, context: Context) {
         // Update container width if it changed
         if uiView.textContainer.size.width != availableWidth {
-            uiView.textContainer.size = CGSize(width: availableWidth, height: .greatestFiniteMagnitude)
+            uiView.textContainer.size = CGSize(
+                width: availableWidth,
+                height: CGFloat.greatestFiniteMagnitude
+            )
         }
 
         // Build attributed string
         let attributedText = NSMutableAttributedString(string: text)
 
-        // Set base font - NO line spacing in paragraph (we'll use verse padding instead)
+        // CRITICAL FIX: Configure paragraph style with proper line height
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineBreakMode = .byWordWrapping
+        paragraphStyle.alignment = .left
+        
+        // Set minimum line height to prevent descender clipping
+        // This ensures letters like "g", "y", "p", "q" have enough space
+        let font = UIFont.systemFont(ofSize: fontSize)
+        let minimumLineHeight = font.lineHeight * 1.1 // 10% extra for descenders
+        paragraphStyle.minimumLineHeight = minimumLineHeight
+        
+        // Apply user's line spacing preference (but ensure it's not too tight)
+        let adjustedLineSpacing = max(lineSpacing, 2.0) // Minimum 2pt spacing
+        paragraphStyle.lineSpacing = adjustedLineSpacing
 
         let baseAttributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: fontSize),
+            .font: font,
             .paragraphStyle: paragraphStyle,
             .foregroundColor: UIColor(colorTheme.textColor)
         ]
 
-        attributedText.addAttributes(baseAttributes, range: NSRange(location: 0, length: attributedText.length))
+        attributedText.addAttributes(
+            baseAttributes,
+            range: NSRange(location: 0, length: attributedText.length)
+        )
 
         // Apply highlights
         for highlight in highlights {
-            let range = NSRange(location: highlight.startIndex, length: highlight.endIndex - highlight.startIndex)
-            if range.location + range.length <= attributedText.length {
+            let range = NSRange(
+                location: highlight.startIndex,
+                length: highlight.endIndex - highlight.startIndex
+            )
+            if range.location >= 0 && range.location + range.length <= attributedText.length {
                 attributedText.addAttribute(
                     .backgroundColor,
                     value: UIColor(highlight.highlightColor),
@@ -98,6 +132,8 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
         uiView.isUserInteractionEnabled = !isAnnotationMode
 
         // Force layout update
+        uiView.setNeedsLayout()
+        uiView.layoutIfNeeded()
         uiView.invalidateIntrinsicContentSize()
     }
     
@@ -112,7 +148,6 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
             self.parent = parent
         }
         
-        // FIXED: Better selection handling
         func textViewDidChangeSelection(_ textView: UITextView) {
             let selectedRange = textView.selectedRange
             
@@ -125,7 +160,6 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
             }
         }
         
-        // FIXED: Long press shows highlight menu immediately
         @objc func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
             guard gesture.state == .began else { return }
             
@@ -185,15 +219,19 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
             .font(.caption)
             .foregroundStyle(.secondary)
 
+        Text("Testing descenders: gypqj")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
         ImprovedSelectableTextView(
             text: verse.text,
             highlights: [],
             fontSize: 16,
             fontFamily: .system,
-            lineSpacing: 6,
+            lineSpacing: 2, // Minimum spacing to test descender fix
             colorTheme: .system,
             isAnnotationMode: false,
-            availableWidth: 300, // Preview width
+            availableWidth: 300,
             onHighlight: { range, text in
                 print("Selected: \(text) at range: \(range)")
             }
