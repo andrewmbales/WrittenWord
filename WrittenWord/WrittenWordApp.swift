@@ -15,6 +15,7 @@ struct WrittenWordApp: App {
             Book.self,
             Chapter.self,
             Verse.self,
+            Word.self,
             Note.self,
             Highlight.self,
             Bookmark.self,
@@ -146,6 +147,11 @@ func seedDataIfNeeded(container: ModelContainer) async {
         print("💾 Saving to database...")
         try modelContext.save()
         print("✅ Seeding complete!")
+
+        // Seed sample interlinear data for John 1:1 as a demonstration
+        print("📖 Seeding sample interlinear data for John 1:1...")
+        try await seedSampleInterlinearData(modelContext: modelContext)
+
         didSeedData = true
 
         // Verify
@@ -163,6 +169,80 @@ func loadBundledJSON(named name: String, withExtension ext: String) throws -> Da
         throw NSError(domain: "Seed", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing bundled JSON \(name).\(ext)"])
     }
     return try Data(contentsOf: url)
+}
+
+@MainActor
+func seedSampleInterlinearData(modelContext: ModelContext) async throws {
+    // Find John 1:1 verse
+    // First find the book of John (should be the 4th gospel, order = 43)
+    let bookFetch = FetchDescriptor<Book>(
+        predicate: #Predicate<Book> { book in
+            book.name == "John"
+        }
+    )
+    guard let john = try modelContext.fetch(bookFetch).first else {
+        print("⚠️ Book of John not found, skipping interlinear data")
+        return
+    }
+
+    // Find chapter 1
+    guard let chapter1 = john.chapters.first(where: { $0.number == 1 }) else {
+        print("⚠️ John chapter 1 not found, skipping interlinear data")
+        return
+    }
+
+    // Find verse 1
+    guard let verse1 = chapter1.verses.first(where: { $0.number == 1 }) else {
+        print("⚠️ John 1:1 not found, skipping interlinear data")
+        return
+    }
+
+    print("📝 Found John 1:1: \(verse1.text)")
+
+    // John 1:1 KJV: "In the beginning was the Word, and the Word was with God, and the Word was God."
+    // Greek: "Ἐν ἀρχῇ ἦν ὁ λόγος, καὶ ὁ λόγος ἦν πρὸς τὸν θεόν, καὶ θεὸς ἦν ὁ λόγος."
+
+    // Create interlinear word mappings
+    let sampleWords: [(originalText: String, transliteration: String, strongs: String, gloss: String, morphology: String, wordIndex: Int, start: Int, end: Int, translated: String)] = [
+        ("Ἐν", "en", "G1722", "in", "Preposition", 0, 0, 2, "In"),
+        ("ἀρχῇ", "archē", "G746", "beginning", "Noun - Dative Feminine Singular", 1, 3, 6, "the"),
+        ("ἦν", "ēn", "G1510", "was", "Verb - Imperfect Indicative Active - 3rd Person Singular", 2, 7, 10, "beginning"),
+        ("ὁ", "ho", "G3588", "the", "Article - Nominative Masculine Singular", 3, 11, 14, "was"),
+        ("λόγος", "logos", "G3056", "Word", "Noun - Nominative Masculine Singular", 4, 15, 19, "the Word"),
+        ("καὶ", "kai", "G2532", "and", "Conjunction", 5, 19, 20, ","),
+        ("ὁ", "ho", "G3588", "the", "Article - Nominative Masculine Singular", 6, 21, 24, "and"),
+        ("λόγος", "logos", "G3056", "Word", "Noun - Nominative Masculine Singular", 7, 25, 29, "the Word"),
+        ("ἦν", "ēn", "G1510", "was", "Verb - Imperfect Indicative Active - 3rd Person Singular", 8, 30, 33, "was"),
+        ("πρὸς", "pros", "G4314", "with", "Preposition", 9, 34, 38, "with"),
+        ("τὸν", "ton", "G3588", "the", "Article - Accusative Masculine Singular", 10, 39, 42, ""),
+        ("θεόν", "theon", "G2316", "God", "Noun - Accusative Masculine Singular", 11, 43, 46, "God"),
+        ("καὶ", "kai", "G2532", "and", "Conjunction", 12, 46, 47, ","),
+        ("θεὸς", "theos", "G2316", "God", "Noun - Nominative Masculine Singular", 13, 48, 51, "and"),
+        ("ἦν", "ēn", "G1510", "was", "Verb - Imperfect Indicative Active - 3rd Person Singular", 14, 52, 55, "the Word"),
+        ("ὁ", "ho", "G3588", "the", "Article - Nominative Masculine Singular", 15, 56, 59, "was"),
+        ("λόγος", "logos", "G3056", "Word", "Noun - Nominative Masculine Singular", 16, 60, 64, "God"),
+    ]
+
+    for wordData in sampleWords {
+        let word = Word(
+            originalText: wordData.originalText,
+            transliteration: wordData.transliteration,
+            strongsNumber: wordData.strongs,
+            gloss: wordData.gloss,
+            morphology: wordData.morphology,
+            wordIndex: wordData.wordIndex,
+            startPosition: wordData.start,
+            endPosition: wordData.end,
+            translatedText: wordData.translated,
+            language: "grk",
+            verse: verse1
+        )
+        modelContext.insert(word)
+        verse1.words.append(word)
+    }
+
+    try modelContext.save()
+    print("✅ Sample interlinear data seeded for John 1:1 (\(sampleWords.count) words)")
 }
 
 // MARK: - Decoding models matching the bundled JSON
