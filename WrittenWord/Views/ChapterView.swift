@@ -84,7 +84,7 @@ struct ChapterView: View {
                                 bookmarkVerse(verse)
                             }
                         )
-                        .padding(.vertical, 4)
+                        .padding(.vertical, lineSpacing / 2)
                         .padding(.leading, notePosition == .left ? 240 : 20)
                         .padding(.trailing, notePosition == .right ? 240 : 20)
                         .background(

@@ -54,7 +54,6 @@ struct VerseRow: View {
                 isAnnotationMode: isAnnotationMode,
                 onHighlight: onTextSelected
             )
-            .id("\(verse.id)-\(lineSpacing)-\(fontSize)-\(colorTheme.rawValue)")
         }
         .contentShape(Rectangle()) // Makes the entire row tappable
         .contextMenu {
