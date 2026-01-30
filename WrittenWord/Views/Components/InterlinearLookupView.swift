@@ -173,7 +173,7 @@ struct InterlinearLookupView: View {
                             if let morphology = word.morphology {
                                 Text("Code: \(morphology)")
                                     .font(.caption2)
-                                    .foregroundColor(.tertiary)
+                                    .foregroundStyle(.tertiary)
                                     .padding(.top, 4)
                             }
                         }
