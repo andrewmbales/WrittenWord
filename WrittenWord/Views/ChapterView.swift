@@ -24,18 +24,18 @@ struct ChapterView: View {
     @Query private var allNotes: [Note]
     @Query private var allHighlights: [Highlight]
 
-    // State for interlinear word lookup
+    // State for unified selection menu (interlinear + highlighting)
     @State private var selectedWord: Word?
-    @State private var showInterlinearLookup = false
     @State private var selectedVerse: Verse?
-    @State private var isInlineInterlinearMode = false
-
-    // State for highlighting (fallback when no interlinear data)
-    @State private var showHighlightMenu = false
+    @State private var showUnifiedSelectionMenu = false
     @State private var selectedText = ""
     @State private var selectedRange: NSRange?
-    @State private var selectedHighlightColor: HighlightColor = .yellow
     @State private var selectionDebounceTask: Task<Void, Never>?
+
+    // State for search
+    @State private var showSearch = false
+    @State private var searchText = ""
+    @State private var searchScope: SearchScope = .currentChapter
 
     // Multi-verse selection state
     @State private var isMultiSelectMode = false
@@ -66,14 +66,6 @@ struct ChapterView: View {
         allNotes.first { $0.chapter?.id == chapter.id }
     }
 
-    private var interlinearIcon: String {
-        // Hebrew Aleph for Old Testament, Greek alpha for New Testament
-        if let testament = chapter.book?.testament {
-            return testament == "OT" ? "א" : "α"
-        }
-        return "α" // Default to Greek alpha
-    }
-
     var body: some View {
         ZStack {
             // Main content
@@ -86,17 +78,13 @@ struct ChapterView: View {
                             lineSpacing: lineSpacing,
                             fontFamily: fontFamily,
                             colorTheme: colorTheme,
+                            notePosition: notePosition,
                             isAnnotationMode: selectedTool != .none,
-                            isInlineInterlinearMode: isInlineInterlinearMode,
                             onTextSelected: { range, text in
                                 handleTextSelection(verse: verse, range: range, text: text)
                             },
                             onBookmark: {
                                 bookmarkVerse(verse)
-                            },
-                            onWordTapped: { word in
-                                selectedWord = word
-                                showInterlinearLookup = true
                             }
                         )
                         .padding(.vertical, lineSpacing / 2)
@@ -140,22 +128,11 @@ struct ChapterView: View {
 
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: 16) {
-                    // Inline interlinear toggle (Hebrew Aleph for OT, Greek alpha for NT)
+                    // Search button
                     Button {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            isInlineInterlinearMode.toggle()
-                        }
+                        showSearch = true
                     } label: {
-                        HStack(spacing: 2) {
-                            Text(interlinearIcon)
-                                .font(.system(size: 18, weight: .medium))
-                                .foregroundColor(isInlineInterlinearMode ? .blue : .primary)
-                            if isInlineInterlinearMode {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.blue)
-                            }
-                        }
+                        Image(systemName: "magnifyingglass")
                     }
 
                     // Note button
@@ -183,13 +160,11 @@ struct ChapterView: View {
                 }
             }
         }
-        .sheet(isPresented: $showInterlinearLookup) {
-            if let word = selectedWord {
-                InterlinearLookupView(word: word)
-            }
+        .sheet(isPresented: $showUnifiedSelectionMenu) {
+            unifiedSelectionMenuView
         }
-        .sheet(isPresented: $showHighlightMenu) {
-            highlightMenuView
+        .sheet(isPresented: $showSearch) {
+            searchView
         }
         .sheet(isPresented: $showMultiHighlightPalette) {
             multiHighlightPaletteView
@@ -237,42 +212,70 @@ struct ChapterView: View {
         }
     }
 
-    private var highlightMenuView: some View {
-        VStack(spacing: 20) {
-            Text("Highlight Text")
-                .font(.headline)
+    private var unifiedSelectionMenuView: some View {
+        Group {
+            if let verse = selectedVerse, let range = selectedRange {
+                let verseHighlights = allHighlights.filter { $0.verseId == verse.id }
+                UnifiedSelectionMenu(
+                    selectedText: selectedText,
+                    selectedWord: selectedWord,
+                    verse: verse,
+                    range: range,
+                    existingHighlights: verseHighlights,
+                    onHighlight: { color in
+                        createOrToggleHighlight(color: color)
+                    },
+                    onRemoveHighlight: { color in
+                        removeHighlight(color: color)
+                    },
+                    onCancel: {
+                        showUnifiedSelectionMenu = false
+                        clearSelection()
+                    }
+                )
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
 
-            Text(selectedText)
-                .padding()
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(8)
+    private var searchView: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                // Search bar
+                TextField("Search...", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal)
 
-            // Color palette
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 60))], spacing: 12) {
-                ForEach(HighlightColor.allCases, id: \.self) { color in
-                    Button {
-                        createHighlight(color: color)
-                    } label: {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(color.color)
-                            .frame(height: 50)
-                            .overlay(
-                                Text(color.rawValue.capitalized)
-                                    .font(.caption)
-                                    .foregroundColor(.black.opacity(0.7))
-                            )
+                // Search scope picker
+                Picker("Search Scope", selection: $searchScope) {
+                    Text("Current Chapter").tag(SearchScope.currentChapter)
+                    Text("All Books").tag(SearchScope.allBooks)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+
+                // Search results would go here
+                if !searchText.isEmpty {
+                    Text("Search feature coming soon")
+                        .foregroundColor(.secondary)
+                        .padding()
+                }
+
+                Spacer()
+            }
+            .padding(.top)
+            .navigationTitle("Search")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        showSearch = false
+                        searchText = ""
                     }
                 }
             }
-            .padding()
-
-            Button("Cancel") {
-                showHighlightMenu = false
-            }
-            .padding()
         }
-        .padding()
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
     }
 
     private func handleTextSelection(verse: Verse, range: NSRange, text: String) {
@@ -293,14 +296,10 @@ struct ChapterView: View {
 
                 if !Task.isCancelled {
                     // Check if we have interlinear data for this word
-                    if let word = WordLookupService.findWord(in: verse, for: range) {
-                        // Show interlinear lookup
-                        selectedWord = word
-                        showInterlinearLookup = true
-                    } else {
-                        // Fallback to highlighting menu
-                        showHighlightMenu = true
-                    }
+                    selectedWord = WordLookupService.findWord(in: verse, for: range)
+
+                    // Show unified selection menu (with or without interlinear data)
+                    showUnifiedSelectionMenu = true
                 }
             } catch {
                 // Task was cancelled, do nothing
@@ -308,28 +307,76 @@ struct ChapterView: View {
         }
     }
 
-    private func createHighlight(color: HighlightColor) {
+    private func clearSelection() {
+        selectedVerse = nil
+        selectedRange = nil
+        selectedText = ""
+        selectedWord = nil
+    }
+
+    private func createOrToggleHighlight(color: HighlightColor) {
         guard let verse = selectedVerse,
               let range = selectedRange else {
             return
         }
 
-        let highlight = Highlight(
-            verseId: verse.id,
-            startIndex: range.location,
-            endIndex: range.location + range.length,
-            color: color.color,
-            text: selectedText,
-            verse: verse
-        )
+        // Check if identical highlight exists (same verse, range, and color)
+        let existingHighlight = allHighlights.first { highlight in
+            highlight.verseId == verse.id &&
+            highlight.startIndex == range.location &&
+            highlight.endIndex == range.location + range.length &&
+            colorsMatch(highlight.highlightColor, color.color)
+        }
 
-        modelContext.insert(highlight)
+        if let existingHighlight = existingHighlight {
+            // Toggle off: remove the highlight
+            modelContext.delete(existingHighlight)
+        } else {
+            // Create new highlight
+            let highlight = Highlight(
+                verseId: verse.id,
+                startIndex: range.location,
+                endIndex: range.location + range.length,
+                color: color.color,
+                text: selectedText,
+                verse: verse
+            )
+            modelContext.insert(highlight)
+        }
+
         try? modelContext.save()
 
-        showHighlightMenu = false
-        selectedRange = nil
-        selectedText = ""
-        selectedVerse = nil
+        showUnifiedSelectionMenu = false
+        clearSelection()
+    }
+
+    private func removeHighlight(color: HighlightColor) {
+        guard let verse = selectedVerse,
+              let range = selectedRange else {
+            return
+        }
+
+        // Find and remove the specific highlight
+        let highlightToRemove = allHighlights.first { highlight in
+            highlight.verseId == verse.id &&
+            highlight.startIndex == range.location &&
+            highlight.endIndex == range.location + range.length &&
+            colorsMatch(highlight.highlightColor, color.color)
+        }
+
+        if let highlightToRemove = highlightToRemove {
+            modelContext.delete(highlightToRemove)
+            try? modelContext.save()
+        }
+
+        showUnifiedSelectionMenu = false
+        clearSelection()
+    }
+
+    private func colorsMatch(_ c1: Color, _ c2: Color) -> Bool {
+        let uiColor1 = UIColor(c1)
+        let uiColor2 = UIColor(c2)
+        return uiColor1.cgColor.components?.dropLast() == uiColor2.cgColor.components?.dropLast()
     }
 
     private func bookmarkVerse(_ verse: Verse) {
@@ -456,18 +503,32 @@ struct ChapterView: View {
     }
 
     private func createMultiHighlight(color: HighlightColor) {
-        // Create a highlight for the entire text of each selected verse
+        // Create or toggle highlight for the entire text of each selected verse
         for verseId in selectedVerses {
             if let verse = sortedVerses.first(where: { $0.id == verseId }) {
-                let highlight = Highlight(
-                    verseId: verse.id,
-                    startIndex: 0,
-                    endIndex: verse.text.count,
-                    color: color.color,
-                    text: verse.text,
-                    verse: verse
-                )
-                modelContext.insert(highlight)
+                // Check if identical highlight exists for this verse
+                let existingHighlight = allHighlights.first { highlight in
+                    highlight.verseId == verse.id &&
+                    highlight.startIndex == 0 &&
+                    highlight.endIndex == verse.text.count &&
+                    colorsMatch(highlight.highlightColor, color.color)
+                }
+
+                if let existingHighlight = existingHighlight {
+                    // Toggle off: remove the highlight
+                    modelContext.delete(existingHighlight)
+                } else {
+                    // Create new highlight
+                    let highlight = Highlight(
+                        verseId: verse.id,
+                        startIndex: 0,
+                        endIndex: verse.text.count,
+                        color: color.color,
+                        text: verse.text,
+                        verse: verse
+                    )
+                    modelContext.insert(highlight)
+                }
             }
         }
 
@@ -564,6 +625,13 @@ struct ChapterView: View {
         // Clean up
         clearNoteEditor()
     }
+}
+
+// MARK: - Search Scope
+
+enum SearchScope {
+    case currentChapter
+    case allBooks
 }
 
 // MARK: - Canvas View Representable for Note Editor
