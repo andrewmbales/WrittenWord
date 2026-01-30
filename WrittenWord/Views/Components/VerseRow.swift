@@ -54,6 +54,7 @@ struct VerseRow: View {
                 isAnnotationMode: isAnnotationMode,
                 onHighlight: onTextSelected
             )
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .contentShape(Rectangle()) // Makes the entire row tappable
         .contextMenu {
