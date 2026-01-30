@@ -22,11 +22,13 @@ struct ChapterView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Query private var allNotes: [Note]
+    @Query private var allHighlights: [Highlight]
 
     // State for interlinear word lookup
     @State private var selectedWord: Word?
     @State private var showInterlinearLookup = false
     @State private var selectedVerse: Verse?
+    @State private var isInlineInterlinearMode = false
 
     // State for highlighting (fallback when no interlinear data)
     @State private var showHighlightMenu = false
@@ -64,6 +66,14 @@ struct ChapterView: View {
         allNotes.first { $0.chapter?.id == chapter.id }
     }
 
+    private var interlinearIcon: String {
+        // Hebrew Aleph for Old Testament, Greek alpha for New Testament
+        if let testament = chapter.book?.testament {
+            return testament == "OT" ? "א" : "α"
+        }
+        return "α" // Default to Greek alpha
+    }
+
     var body: some View {
         ZStack {
             // Main content
@@ -77,11 +87,16 @@ struct ChapterView: View {
                             fontFamily: fontFamily,
                             colorTheme: colorTheme,
                             isAnnotationMode: selectedTool != .none,
+                            isInlineInterlinearMode: isInlineInterlinearMode,
                             onTextSelected: { range, text in
                                 handleTextSelection(verse: verse, range: range, text: text)
                             },
                             onBookmark: {
                                 bookmarkVerse(verse)
+                            },
+                            onWordTapped: { word in
+                                selectedWord = word
+                                showInterlinearLookup = true
                             }
                         )
                         .padding(.vertical, lineSpacing / 2)
@@ -125,6 +140,24 @@ struct ChapterView: View {
 
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: 16) {
+                    // Inline interlinear toggle (Hebrew Aleph for OT, Greek alpha for NT)
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            isInlineInterlinearMode.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 2) {
+                            Text(interlinearIcon)
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(isInlineInterlinearMode ? .blue : .primary)
+                            if isInlineInterlinearMode {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                    }
+
                     // Note button
                     Button {
                         showingNoteEditor = true
@@ -373,6 +406,20 @@ struct ChapterView: View {
             }
             .padding()
 
+            // Remove highlights button
+            if selectedVersesHaveHighlights() {
+                Button(role: .destructive) {
+                    removeHighlightsFromSelectedVerses()
+                } label: {
+                    Label("Remove All Highlights", systemImage: "trash")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(8)
+                }
+                .padding(.horizontal)
+            }
+
             Button("Cancel") {
                 showMultiHighlightPalette = false
             }
@@ -380,6 +427,32 @@ struct ChapterView: View {
         }
         .padding()
         .presentationDetents([.medium])
+    }
+
+    private func selectedVersesHaveHighlights() -> Bool {
+        for verseId in selectedVerses {
+            if allHighlights.contains(where: { $0.verseId == verseId }) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private func removeHighlightsFromSelectedVerses() {
+        for verseId in selectedVerses {
+            // Find and delete all highlights for this verse
+            let highlights = allHighlights.filter { $0.verseId == verseId }
+            for highlight in highlights {
+                modelContext.delete(highlight)
+            }
+        }
+
+        try? modelContext.save()
+
+        // Clean up
+        showMultiHighlightPalette = false
+        isMultiSelectMode = false
+        selectedVerses.removeAll()
     }
 
     private func createMultiHighlight(color: HighlightColor) {
