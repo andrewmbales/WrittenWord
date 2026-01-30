@@ -35,7 +35,7 @@ struct ChapterView: View {
     // State for search
     @State private var showSearch = false
     @State private var searchText = ""
-    @State private var searchScope: SearchScope = .currentChapter
+    @State private var searchScope: SearchScope = .currentBook
 
     // Multi-verse selection state
     @State private var isMultiSelectMode = false
@@ -248,8 +248,8 @@ struct ChapterView: View {
 
                 // Search scope picker
                 Picker("Search Scope", selection: $searchScope) {
-                    Text("Current Chapter").tag(SearchScope.currentChapter)
-                    Text("All Books").tag(SearchScope.allBooks)
+                    Text("Current Book").tag(SearchScope.currentBook)
+                    Text("All Books").tag(SearchScope.all)
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
@@ -625,13 +625,6 @@ struct ChapterView: View {
         // Clean up
         clearNoteEditor()
     }
-}
-
-// MARK: - Search Scope
-
-enum SearchScope {
-    case currentChapter
-    case allBooks
 }
 
 // MARK: - Canvas View Representable for Note Editor
