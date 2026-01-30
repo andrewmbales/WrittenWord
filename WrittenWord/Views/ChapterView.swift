@@ -27,6 +27,7 @@ struct ChapterView: View {
     @State private var selectedWord: Word?
     @State private var showInterlinearLookup = false
     @State private var selectedVerse: Verse?
+    @State private var isInlineInterlinearMode = false
 
     // State for highlighting (fallback when no interlinear data)
     @State private var showHighlightMenu = false
@@ -77,11 +78,16 @@ struct ChapterView: View {
                             fontFamily: fontFamily,
                             colorTheme: colorTheme,
                             isAnnotationMode: selectedTool != .none,
+                            isInlineInterlinearMode: isInlineInterlinearMode,
                             onTextSelected: { range, text in
                                 handleTextSelection(verse: verse, range: range, text: text)
                             },
                             onBookmark: {
                                 bookmarkVerse(verse)
+                            },
+                            onWordTapped: { word in
+                                selectedWord = word
+                                showInterlinearLookup = true
                             }
                         )
                         .padding(.vertical, lineSpacing / 2)
@@ -125,6 +131,16 @@ struct ChapterView: View {
 
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: 16) {
+                    // Inline interlinear toggle
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            isInlineInterlinearMode.toggle()
+                        }
+                    } label: {
+                        Image(systemName: isInlineInterlinearMode ? "character.textbox" : "character.book.closed")
+                            .foregroundColor(isInlineInterlinearMode ? .blue : .primary)
+                    }
+
                     // Note button
                     Button {
                         showingNoteEditor = true
