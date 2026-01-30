@@ -71,18 +71,18 @@ struct InlineWordView: View {
             // English word
             Text(word.translatedText)
                 .font(fontFor(size: fontSize))
-                .foregroundColor(partOfSpeechColor)
+                .foregroundStyle(partOfSpeechColor)
                 .fontWeight(.medium)
 
             // Original language and transliteration
             VStack(alignment: .leading, spacing: 1) {
                 Text(word.originalText)
                     .font(.system(size: fontSize * 0.7))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
 
                 Text(word.transliteration)
                     .font(.system(size: fontSize * 0.6))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .italic()
             }
         }
