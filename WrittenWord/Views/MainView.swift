@@ -12,7 +12,8 @@ struct MainView: View {
     @State private var selectedChapter: Chapter?
     @State private var showingSearch = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    
+    @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
+
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             // Sidebar
@@ -57,6 +58,8 @@ struct MainView: View {
             .navigationSplitViewColumnWidth(min: 600, ideal: 900)
         }
         .navigationSplitViewStyle(.balanced)
+        .preferredColorScheme(colorTheme == .dark ? .dark : colorTheme == .light ? .light : nil)
+        .background(colorTheme.backgroundColor)
         .onChange(of: selectedChapter) { _, newValue in
             // When selecting a chapter, hide search and collapse sidebar
             if newValue != nil {

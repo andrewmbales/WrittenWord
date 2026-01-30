@@ -14,12 +14,26 @@ struct SidebarView: View {
     @Binding var showingSearch: Bool
     var onNavigationAction: (() -> Void)? = nil
 
+    @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
+    @Environment(\.colorScheme) private var systemColorScheme
+
     @State private var selectedBook: Book?
     @State private var showingSettings = false
     @State private var showingNotebook = false
     @State private var showingHighlights = false
     @State private var showingBookmarks = false
     @State private var showingStats = false
+
+    private var buttonColor: Color {
+        switch colorTheme {
+        case .light, .sepia, .sand:
+            return .black
+        case .dark:
+            return .white
+        case .system:
+            return systemColorScheme == .dark ? .white : .black
+        }
+    }
     
     var oldTestamentBooks: [Book] {
         books.filter { $0.testament == "OT" }
@@ -31,23 +45,35 @@ struct SidebarView: View {
     
     var body: some View {
         List {
-            // Top navigation buttons
+            // Settings
             Section {
                 Button {
                     onNavigationAction?()
                     showingSettings = true
                 } label: {
                     Label("Settings", systemImage: "gear")
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(buttonColor)
                 }
                 .buttonStyle(.plain)
+            }
 
+            // Books of the Bible
+            Section("BOOKS OF THE BIBLE") {
+                if let selectedBook = selectedBook {
+                    chapterGridView(for: selectedBook)
+                } else {
+                    twoColumnBookLayout
+                }
+            }
+
+            // Study tools
+            Section("My Study") {
                 Button {
                     onNavigationAction?()
                     showingHighlights = true
                 } label: {
                     Label("Highlights", systemImage: "highlighter")
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(buttonColor)
                 }
                 .buttonStyle(.plain)
 
@@ -56,7 +82,7 @@ struct SidebarView: View {
                     showingNotebook = true
                 } label: {
                     Label("Notes", systemImage: "note.text")
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(buttonColor)
                 }
                 .buttonStyle(.plain)
 
@@ -66,28 +92,16 @@ struct SidebarView: View {
                     showingSearch = true
                 } label: {
                     Label("Search", systemImage: "magnifyingglass")
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(buttonColor)
                 }
                 .buttonStyle(.plain)
-            }
-            
-            // Books of the Bible
-            Section("BOOKS OF THE BIBLE") {
-                if let selectedBook = selectedBook {
-                    chapterGridView(for: selectedBook)
-                } else {
-                    twoColumnBookLayout
-                }
-            }
-            
-            // Study tools
-            Section("My Study") {
+
                 Button {
                     onNavigationAction?()
                     showingBookmarks = true
                 } label: {
                     Label("Bookmarks", systemImage: "bookmark.fill")
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(buttonColor)
                 }
                 .buttonStyle(.plain)
 
@@ -96,7 +110,7 @@ struct SidebarView: View {
                     showingStats = true
                 } label: {
                     Label("Statistics", systemImage: "chart.bar.fill")
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(buttonColor)
                 }
                 .buttonStyle(.plain)
             }

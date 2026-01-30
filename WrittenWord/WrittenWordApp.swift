@@ -198,10 +198,13 @@ func seedSampleInterlinearData(modelContext: ModelContext) async throws {
         // John 1:1 KJV: "In the beginning was the Word, and the Word was with God, and the Word was God."
         let words1: [(String, String, String, String, String, Int, Int, Int, String)] = [
             ("Ἐν", "en", "G1722", "in", "Preposition", 0, 0, 2, "In"),
-            ("ἀρχῇ", "archē", "G746", "beginning", "Noun - Dative Feminine Singular", 1, 3, 6, "the"),
-            ("ἦν", "ēn", "G1510", "was", "Verb - Imperfect Indicative Active - 3rd Person Singular", 2, 7, 10, "beginning"),
-            ("ὁ", "ho", "G3588", "the", "Article - Nominative Masculine Singular", 3, 11, 14, "was"),
-            ("λόγος", "logos", "G3056", "Word", "Noun - Nominative Masculine Singular", 4, 15, 19, "the Word"),
+            ("ἀρχῇ", "archē", "G746", "beginning", "Noun - Dative Feminine Singular", 1, 7, 16, "beginning"),
+            ("ἦν", "ēn", "G1510", "was", "Verb - Imperfect Indicative Active - 3rd Person Singular", 2, 17, 20, "was"),
+            ("λόγος", "logos", "G3056", "Word", "Noun - Nominative Masculine Singular", 3, 25, 29, "Word"),
+            ("λόγος", "logos", "G3056", "Word", "Noun - Nominative Masculine Singular", 4, 39, 43, "Word"),
+            ("θεόν", "theon", "G2316", "God", "Noun - Accusative Masculine Singular", 5, 53, 56, "God"),
+            ("λόγος", "logos", "G3056", "Word", "Noun - Nominative Masculine Singular", 6, 66, 70, "Word"),
+            ("θεός", "theos", "G2316", "God", "Noun - Nominative Masculine Singular", 7, 75, 78, "God"),
         ]
         for w in words1 {
             let word = Word(originalText: w.0, transliteration: w.1, strongsNumber: w.2, gloss: w.3, morphology: w.4, wordIndex: w.5, startPosition: w.6, endPosition: w.7, translatedText: w.8, language: "grk", verse: verse1)
@@ -216,12 +219,12 @@ func seedSampleInterlinearData(modelContext: ModelContext) async throws {
         print("📝 Seeding John 1:2: \(verse2.text)")
         // John 1:2 KJV: "The same was in the beginning with God."
         let words2: [(String, String, String, String, String, Int, Int, Int, String)] = [
-            ("οὗτος", "houtos", "G3778", "this one", "Demonstrative Pronoun - Nominative Masculine Singular", 0, 0, 3, "The same"),
-            ("ἦν", "ēn", "G1510", "was", "Verb - Imperfect Indicative Active - 3rd Person Singular", 1, 4, 7, "was"),
-            ("ἐν", "en", "G1722", "in", "Preposition", 2, 8, 10, "in"),
-            ("ἀρχῇ", "archē", "G746", "beginning", "Noun - Dative Feminine Singular", 3, 11, 14, "the beginning"),
-            ("πρὸς", "pros", "G4314", "with", "Preposition", 4, 15, 19, "with"),
-            ("θεόν", "theon", "G2316", "God", "Noun - Accusative Masculine Singular", 5, 20, 23, "God"),
+            ("οὗτος", "houtos", "G3778", "this one", "Demonstrative Pronoun - Nominative Masculine Singular", 0, 4, 8, "same"),
+            ("ἦν", "ēn", "G1510", "was", "Verb - Imperfect Indicative Active - 3rd Person Singular", 1, 9, 12, "was"),
+            ("ἐν", "en", "G1722", "in", "Preposition", 2, 13, 15, "in"),
+            ("ἀρχῇ", "archē", "G746", "beginning", "Noun - Dative Feminine Singular", 3, 20, 29, "beginning"),
+            ("πρὸς", "pros", "G4314", "with", "Preposition", 4, 30, 34, "with"),
+            ("θεόν", "theon", "G2316", "God", "Noun - Accusative Masculine Singular", 5, 35, 38, "God"),
         ]
         for w in words2 {
             let word = Word(originalText: w.0, transliteration: w.1, strongsNumber: w.2, gloss: w.3, morphology: w.4, wordIndex: w.5, startPosition: w.6, endPosition: w.7, translatedText: w.8, language: "grk", verse: verse2)
@@ -236,10 +239,10 @@ func seedSampleInterlinearData(modelContext: ModelContext) async throws {
         print("📝 Seeding John 1:3: \(verse3.text)")
         // John 1:3 KJV: "All things were made by him; and without him was not any thing made that was made."
         let words3: [(String, String, String, String, String, Int, Int, Int, String)] = [
-            ("πάντα", "panta", "G3956", "all things", "Adjective - Nominative Neuter Plural", 0, 0, 3, "All things"),
-            ("δι'", "di", "G1223", "through", "Preposition", 1, 4, 8, "by"),
-            ("αὐτοῦ", "autou", "G846", "him", "Personal Pronoun - Genitive Masculine 3rd Person Singular", 2, 9, 13, "him"),
-            ("ἐγένετο", "egeneto", "G1096", "came into being", "Verb - Aorist Indicative Middle - 3rd Person Singular", 3, 14, 18, "were made"),
+            ("πάντα", "panta", "G3956", "all things", "Adjective - Nominative Neuter Plural", 0, 0, 10, "All things"),
+            ("ἐγένετο", "egeneto", "G1096", "came into being", "Verb - Aorist Indicative Middle - 3rd Person Singular", 1, 11, 20, "were made"),
+            ("δι'", "di", "G1223", "through", "Preposition", 2, 21, 23, "by"),
+            ("αὐτοῦ", "autou", "G846", "him", "Personal Pronoun - Genitive Masculine 3rd Person Singular", 3, 24, 27, "him"),
         ]
         for w in words3 {
             let word = Word(originalText: w.0, transliteration: w.1, strongsNumber: w.2, gloss: w.3, morphology: w.4, wordIndex: w.5, startPosition: w.6, endPosition: w.7, translatedText: w.8, language: "grk", verse: verse3)
@@ -256,9 +259,10 @@ func seedSampleInterlinearData(modelContext: ModelContext) async throws {
         let words4: [(String, String, String, String, String, Int, Int, Int, String)] = [
             ("ἐν", "en", "G1722", "in", "Preposition", 0, 0, 2, "In"),
             ("αὐτῷ", "autō", "G846", "him", "Personal Pronoun - Dative Masculine 3rd Person Singular", 1, 3, 6, "him"),
-            ("ζωὴ", "zōē", "G2222", "life", "Noun - Nominative Feminine Singular", 2, 7, 10, "was life"),
-            ("ἦν", "ēn", "G1510", "was", "Verb - Imperfect Indicative Active - 3rd Person Singular", 3, 10, 11, ";"),
-            ("φῶς", "phōs", "G5457", "light", "Noun - Nominative Neuter Singular", 4, 12, 15, "the light"),
+            ("ἦν", "ēn", "G1510", "was", "Verb - Imperfect Indicative Active - 3rd Person Singular", 2, 7, 10, "was"),
+            ("ζωὴ", "zōē", "G2222", "life", "Noun - Nominative Feminine Singular", 3, 11, 15, "life"),
+            ("ζωὴ", "zōē", "G2222", "life", "Noun - Nominative Feminine Singular", 4, 25, 29, "life"),
+            ("φῶς", "phōs", "G5457", "light", "Noun - Nominative Neuter Singular", 5, 38, 43, "light"),
         ]
         for w in words4 {
             let word = Word(originalText: w.0, transliteration: w.1, strongsNumber: w.2, gloss: w.3, morphology: w.4, wordIndex: w.5, startPosition: w.6, endPosition: w.7, translatedText: w.8, language: "grk", verse: verse4)
@@ -274,10 +278,9 @@ func seedSampleInterlinearData(modelContext: ModelContext) async throws {
         // John 1:5 KJV: "And the light shineth in darkness; and the darkness comprehended it not."
         let words5: [(String, String, String, String, String, Int, Int, Int, String)] = [
             ("καὶ", "kai", "G2532", "and", "Conjunction", 0, 0, 3, "And"),
-            ("τὸ", "to", "G3588", "the", "Article - Nominative Neuter Singular", 1, 4, 7, "the"),
-            ("φῶς", "phōs", "G5457", "light", "Noun - Nominative Neuter Singular", 2, 8, 13, "light"),
-            ("φαίνει", "phainei", "G5316", "shines", "Verb - Present Indicative Active - 3rd Person Singular", 3, 14, 21, "shineth"),
-            ("σκοτίᾳ", "skotia", "G4653", "darkness", "Noun - Dative Feminine Singular", 4, 22, 24, "in darkness"),
+            ("φῶς", "phōs", "G5457", "light", "Noun - Nominative Neuter Singular", 1, 8, 13, "light"),
+            ("φαίνει", "phainei", "G5316", "shines", "Verb - Present Indicative Active - 3rd Person Singular", 2, 14, 21, "shineth"),
+            ("σκοτίᾳ", "skotia", "G4653", "darkness", "Noun - Dative Feminine Singular", 3, 25, 33, "darkness"),
         ]
         for w in words5 {
             let word = Word(originalText: w.0, transliteration: w.1, strongsNumber: w.2, gloss: w.3, morphology: w.4, wordIndex: w.5, startPosition: w.6, endPosition: w.7, translatedText: w.8, language: "grk", verse: verse5)

@@ -17,7 +17,9 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
     let fontSize: Double
     let fontFamily: FontFamily
     let lineSpacing: Double
+    let colorTheme: ColorTheme
     let isAnnotationMode: Bool
+    let availableWidth: CGFloat
     let onHighlight: (NSRange, String) -> Void
     
     func makeUIView(context: Context) -> UITextView {
@@ -28,16 +30,21 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
         textView.backgroundColor = .clear
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
-        textView.textContainer.widthTracksTextView = true
-        textView.textContainer.heightTracksTextView = false
-        textView.setContentHuggingPriority(.defaultHigh, for: .vertical)
-        textView.setContentCompressionResistancePriority(.defaultHigh, for: .vertical)
-        textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        
-        // FIXED: Enable text selection with better UX
+
+        // CRITICAL: Set explicit width for text container to enable wrapping
+        // Do NOT use widthTracksTextView - it causes circular dependency
+        textView.textContainer.size = CGSize(width: availableWidth, height: .greatestFiniteMagnitude)
+        textView.textContainer.maximumNumberOfLines = 0
+        textView.textContainer.lineBreakMode = .byWordWrapping
+
+        // Allow vertical expansion, but constrain horizontal
+        textView.setContentHuggingPriority(.required, for: .vertical)
+        textView.setContentCompressionResistancePriority(.required, for: .vertical)
+
+        // Enable text selection
         textView.isSelectable = true
         textView.isUserInteractionEnabled = true
-        
+
         // Add long press gesture for highlight menu
         let longPress = UILongPressGestureRecognizer(
             target: context.coordinator,
@@ -45,28 +52,35 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
         )
         longPress.minimumPressDuration = 0.3
         textView.addGestureRecognizer(longPress)
-        
+
         // Customize selection appearance
         textView.tintColor = UIColor.systemBlue
-        
+
         return textView
     }
     
     func updateUIView(_ uiView: UITextView, context: Context) {
+        // Update container width if it changed
+        if uiView.textContainer.size.width != availableWidth {
+            uiView.textContainer.size = CGSize(width: availableWidth, height: .greatestFiniteMagnitude)
+        }
+
+        // Build attributed string
         let attributedText = NSMutableAttributedString(string: text)
-        
-        // Set base font and spacing
+
+        // Set base font - NO line spacing in paragraph (we'll use verse padding instead)
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = lineSpacing
-        
+        paragraphStyle.lineBreakMode = .byWordWrapping
+
         let baseAttributes: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: fontSize),
-            .paragraphStyle: paragraphStyle
+            .paragraphStyle: paragraphStyle,
+            .foregroundColor: UIColor(colorTheme.textColor)
         ]
-        
+
         attributedText.addAttributes(baseAttributes, range: NSRange(location: 0, length: attributedText.length))
-        
-        // Apply highlights with rounded rectangle background
+
+        // Apply highlights
         for highlight in highlights {
             let range = NSRange(location: highlight.startIndex, length: highlight.endIndex - highlight.startIndex)
             if range.location + range.length <= attributedText.length {
@@ -77,24 +91,23 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
                 )
             }
         }
-        
+
         uiView.attributedText = attributedText
-        
-        // FIXED: Disable interaction when in annotation mode to prevent conflicts
+
+        // Disable interaction when in annotation mode
         uiView.isUserInteractionEnabled = !isAnnotationMode
-        
-        // Force layout to calculate proper size
-        uiView.setNeedsLayout()
-        uiView.layoutIfNeeded()
+
+        // Force layout update
+        uiView.invalidateIntrinsicContentSize()
     }
     
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
-    
+
     class Coordinator: NSObject, UITextViewDelegate {
         var parent: ImprovedSelectableTextView
-        
+
         init(_ parent: ImprovedSelectableTextView) {
             self.parent = parent
         }
@@ -166,24 +179,26 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
 // MARK: - Preview Support
 #Preview {
     let verse = Verse(number: 1, text: "In the beginning God created the heaven and the earth.")
-    
+
     return VStack(alignment: .leading, spacing: 20) {
         Text("Try long-pressing or selecting text:")
             .font(.caption)
             .foregroundStyle(.secondary)
-        
+
         ImprovedSelectableTextView(
             text: verse.text,
             highlights: [],
             fontSize: 16,
             fontFamily: .system,
             lineSpacing: 6,
+            colorTheme: .system,
             isAnnotationMode: false,
+            availableWidth: 300, // Preview width
             onHighlight: { range, text in
                 print("Selected: \(text) at range: \(range)")
             }
         )
-        
+
         Spacer()
     }
     .padding()
