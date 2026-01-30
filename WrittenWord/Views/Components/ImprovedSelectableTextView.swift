@@ -11,7 +11,7 @@
 import SwiftUI
 import UIKit
 
-struct ImprovedSelectableTextView: UIViewRepresentable {
+struct ImprovedSelectableTextView: View {
     let text: String
     let highlights: [Highlight]
     let fontSize: Double
@@ -19,6 +19,34 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
     let lineSpacing: Double
     let colorTheme: ColorTheme
     let isAnnotationMode: Bool
+    let onHighlight: (NSRange, String) -> Void
+
+    var body: some View {
+        GeometryReader { geometry in
+            ImprovedTextViewRepresentable(
+                text: text,
+                highlights: highlights,
+                fontSize: fontSize,
+                fontFamily: fontFamily,
+                lineSpacing: lineSpacing,
+                colorTheme: colorTheme,
+                isAnnotationMode: isAnnotationMode,
+                availableWidth: geometry.size.width,
+                onHighlight: onHighlight
+            )
+        }
+    }
+}
+
+struct ImprovedTextViewRepresentable: UIViewRepresentable {
+    let text: String
+    let highlights: [Highlight]
+    let fontSize: Double
+    let fontFamily: FontFamily
+    let lineSpacing: Double
+    let colorTheme: ColorTheme
+    let isAnnotationMode: Bool
+    let availableWidth: CGFloat
     let onHighlight: (NSRange, String) -> Void
     
     func makeUIView(context: Context) -> UITextView {
@@ -29,14 +57,17 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
         textView.backgroundColor = .clear
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
-        textView.textContainer.lineBreakMode = .byWordWrapping
-        textView.textContainer.widthTracksTextView = true
-        textView.textContainer.heightTracksTextView = false
-        textView.setContentHuggingPriority(.defaultHigh, for: .vertical)
-        textView.setContentCompressionResistancePriority(.defaultHigh, for: .vertical)
+
+        // CRITICAL: Set explicit container size for wrapping
+        textView.textContainer.size = CGSize(width: availableWidth, height: .greatestFiniteMagnitude)
+        textView.textContainer.widthTracksTextView = false
+        textView.textContainer.heightTracksTextView = true
+
+        textView.setContentHuggingPriority(.required, for: .vertical)
+        textView.setContentCompressionResistancePriority(.required, for: .vertical)
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        // FIXED: Enable text selection with better UX
+        // Enable text selection
         textView.isSelectable = true
         textView.isUserInteractionEnabled = true
 
@@ -55,6 +86,19 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: UITextView, context: Context) {
+        // Update container size if width changed
+        if abs(uiView.textContainer.size.width - availableWidth) > 0.1 {
+            uiView.textContainer.size = CGSize(width: availableWidth, height: .greatestFiniteMagnitude)
+        }
+
+        // Store current values in coordinator to detect changes
+        let valuesChanged = context.coordinator.updateValues(
+            lineSpacing: lineSpacing,
+            fontSize: fontSize,
+            text: text
+        )
+
+        // Build attributed string
         let attributedText = NSMutableAttributedString(string: text)
 
         // Set base font and spacing
@@ -70,7 +114,7 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
 
         attributedText.addAttributes(baseAttributes, range: NSRange(location: 0, length: attributedText.length))
 
-        // Apply highlights with rounded rectangle background
+        // Apply highlights
         for highlight in highlights {
             let range = NSRange(location: highlight.startIndex, length: highlight.endIndex - highlight.startIndex)
             if range.location + range.length <= attributedText.length {
@@ -84,26 +128,54 @@ struct ImprovedSelectableTextView: UIViewRepresentable {
 
         uiView.attributedText = attributedText
 
-        // FIXED: Disable interaction when in annotation mode to prevent conflicts
+        // Disable interaction when in annotation mode
         uiView.isUserInteractionEnabled = !isAnnotationMode
 
-        // Force layout recalculation
-        uiView.textContainer.lineBreakMode = .byWordWrapping
-        uiView.invalidateIntrinsicContentSize()
-        uiView.setNeedsLayout()
-        uiView.layoutIfNeeded()
-        uiView.setNeedsDisplay()
+        // CRITICAL: Force complete layout recalculation when values change
+        if valuesChanged {
+            uiView.textContainer.size = CGSize(width: availableWidth, height: .greatestFiniteMagnitude)
+            uiView.invalidateIntrinsicContentSize()
+            uiView.sizeToFit()
+
+            // Force parent view to re-layout
+            DispatchQueue.main.async {
+                uiView.invalidateIntrinsicContentSize()
+            }
+        }
     }
     
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        // Return the intrinsic content size for proper SwiftUI layout
+        let size = uiView.sizeThatFits(CGSize(width: proposal.width ?? availableWidth, height: .greatestFiniteMagnitude))
+        return CGSize(width: proposal.width ?? availableWidth, height: size.height)
+    }
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
-    
+
     class Coordinator: NSObject, UITextViewDelegate {
-        var parent: ImprovedSelectableTextView
-        
-        init(_ parent: ImprovedSelectableTextView) {
+        var parent: ImprovedTextViewRepresentable
+
+        // Track previous values to detect changes
+        private var previousLineSpacing: Double = 0
+        private var previousFontSize: Double = 0
+        private var previousText: String = ""
+
+        init(_ parent: ImprovedTextViewRepresentable) {
             self.parent = parent
+        }
+
+        func updateValues(lineSpacing: Double, fontSize: Double, text: String) -> Bool {
+            let changed = abs(lineSpacing - previousLineSpacing) > 0.01 ||
+                         abs(fontSize - previousFontSize) > 0.01 ||
+                         text != previousText
+
+            previousLineSpacing = lineSpacing
+            previousFontSize = fontSize
+            previousText = text
+
+            return changed
         }
         
         // FIXED: Better selection handling
