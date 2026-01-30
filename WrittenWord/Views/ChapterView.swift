@@ -18,6 +18,7 @@ struct ChapterView: View {
     @AppStorage("lineSpacing") private var lineSpacing: Double = 6.0
     @AppStorage("fontFamily") private var fontFamily: FontFamily = .system
     @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
+    @AppStorage("notePosition") private var notePosition: NotePosition = .right
 
     @Environment(\.modelContext) private var modelContext
     @Query private var allNotes: [Note]
@@ -33,6 +34,11 @@ struct ChapterView: View {
     @State private var selectedRange: NSRange?
     @State private var selectedHighlightColor: HighlightColor = .yellow
     @State private var selectionDebounceTask: Task<Void, Never>?
+
+    // Multi-verse selection state
+    @State private var isMultiSelectMode = false
+    @State private var selectedVerses: Set<UUID> = []
+    @State private var showMultiHighlightPalette = false
 
     // Annotation state
     @State private var selectedTool: AnnotationTool = .none
@@ -71,7 +77,18 @@ struct ChapterView: View {
                             }
                         )
                         .padding(.vertical, 4)
-                        .padding(.horizontal, 20)
+                        .padding(.leading, notePosition == .left ? 120 : 20)
+                        .padding(.trailing, notePosition == .right ? 120 : 20)
+                        .background(
+                            selectedVerses.contains(verse.id) ?
+                            Color.accentColor.opacity(0.15) : Color.clear
+                        )
+                        .cornerRadius(8)
+                        .onTapGesture {
+                            if isMultiSelectMode {
+                                toggleVerseSelection(verse)
+                            }
+                        }
                     }
                 }
                 .padding(.vertical)
@@ -89,8 +106,33 @@ struct ChapterView: View {
         }
         .navigationTitle("\(chapter.book?.name ?? "") \(chapter.number)")
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                if isMultiSelectMode {
+                    Button("Cancel") {
+                        isMultiSelectMode = false
+                        selectedVerses.removeAll()
+                    }
+                }
+            }
+
             ToolbarItem(placement: .navigationBarTrailing) {
-                annotationToolbarButton
+                HStack(spacing: 16) {
+                    if !isMultiSelectMode {
+                        Button {
+                            isMultiSelectMode = true
+                        } label: {
+                            Image(systemName: "checkmark.circle")
+                        }
+                    } else if !selectedVerses.isEmpty {
+                        Button {
+                            showMultiHighlightPalette = true
+                        } label: {
+                            Image(systemName: "highlighter")
+                        }
+                    }
+
+                    annotationToolbarButton
+                }
             }
         }
         .sheet(isPresented: $showInterlinearLookup) {
@@ -100,6 +142,9 @@ struct ChapterView: View {
         }
         .sheet(isPresented: $showHighlightMenu) {
             highlightMenuView
+        }
+        .sheet(isPresented: $showMultiHighlightPalette) {
+            multiHighlightPaletteView
         }
         .sheet(isPresented: $showingColorPicker) {
             ColorPicker("Select Color", selection: $selectedColor)
@@ -272,5 +317,70 @@ struct ChapterView: View {
         }
 
         try? modelContext.save()
+    }
+
+    private func toggleVerseSelection(_ verse: Verse) {
+        if selectedVerses.contains(verse.id) {
+            selectedVerses.remove(verse.id)
+        } else {
+            selectedVerses.insert(verse.id)
+        }
+    }
+
+    private var multiHighlightPaletteView: some View {
+        VStack(spacing: 20) {
+            Text("Highlight \(selectedVerses.count) Verse\(selectedVerses.count == 1 ? "" : "s")")
+                .font(.headline)
+
+            // Color palette
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 60))], spacing: 12) {
+                ForEach(HighlightColor.allCases, id: \.self) { color in
+                    Button {
+                        createMultiHighlight(color: color)
+                    } label: {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(color.color)
+                            .frame(height: 50)
+                            .overlay(
+                                Text(color.rawValue.capitalized)
+                                    .font(.caption)
+                                    .foregroundColor(.black.opacity(0.7))
+                            )
+                    }
+                }
+            }
+            .padding()
+
+            Button("Cancel") {
+                showMultiHighlightPalette = false
+            }
+            .padding()
+        }
+        .padding()
+        .presentationDetents([.medium])
+    }
+
+    private func createMultiHighlight(color: HighlightColor) {
+        // Create a highlight for the entire text of each selected verse
+        for verseId in selectedVerses {
+            if let verse = sortedVerses.first(where: { $0.id == verseId }) {
+                let highlight = Highlight(
+                    verseId: verse.id,
+                    startIndex: 0,
+                    endIndex: verse.text.count,
+                    color: color.color,
+                    text: verse.text,
+                    verse: verse
+                )
+                modelContext.insert(highlight)
+            }
+        }
+
+        try? modelContext.save()
+
+        // Clean up
+        showMultiHighlightPalette = false
+        isMultiSelectMode = false
+        selectedVerses.removeAll()
     }
 }

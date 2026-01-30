@@ -34,7 +34,7 @@ struct SettingsView: View {
                         Text("\(Int(lineSpacing))")
                             .foregroundStyle(.secondary)
                     }
-                    Slider(value: $lineSpacing, in: 2...12, step: 2)
+                    Slider(value: $lineSpacing, in: 2...36, step: 2)
                 }
                 
                 Picker("Font Family", selection: $fontFamily) {
