@@ -17,7 +17,7 @@ class LexiconService {
 
     /// Get a lexicon entry for a given word
     func getLexiconEntry(for word: Word) -> LexiconEntry? {
-        guard let strongsNumber = word.strongsNumber else { return nil }
+        guard word.strongsNumber != nil else { return nil }
 
         // In a production app, this would query a lexicon database
         // For now, we'll return sample data or generate from existing word data

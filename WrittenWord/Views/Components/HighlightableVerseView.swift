@@ -201,7 +201,7 @@ struct SelectableTextView: UIViewRepresentable {
     )
     container.mainContext.insert(highlight)
 
-    HighlightableVerseView(
+    return HighlightableVerseView(
         verse: verse,
         selectedText: .constant(""),
         selectedRange: .constant(nil),

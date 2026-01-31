@@ -41,7 +41,8 @@ struct InterlinearBottomSheet: View {
                                     .foregroundColor(.white.opacity(0.8))
 
                                 // Part of speech indicator
-                                if let parsed = MorphologyParser.parse(word.morphology ?? "") {
+                                let parsed = MorphologyParser.parse(word.morphology ?? "")
+                                if !parsed.partOfSpeech.isEmpty {
                                     Text(parsed.partOfSpeech.lowercased() + ".")
                                         .font(.system(size: 18))
                                         .italic()
@@ -273,63 +274,6 @@ struct ActionButton: View {
     }
 }
 
-// MARK: - Flow Layout for Tags
-
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = FlowResult(
-            in: proposal.replacingUnspecifiedDimensions().width,
-            subviews: subviews,
-            spacing: spacing
-        )
-        return result.size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = FlowResult(
-            in: bounds.width,
-            subviews: subviews,
-            spacing: spacing
-        )
-        for (index, subview) in subviews.enumerated() {
-            subview.place(at: result.positions[index], proposal: .unspecified)
-        }
-    }
-
-    struct FlowResult {
-        var size: CGSize = .zero
-        var positions: [CGPoint] = []
-
-        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
-            var currentX: CGFloat = 0
-            var currentY: CGFloat = 0
-            var lineHeight: CGFloat = 0
-
-            for subview in subviews {
-                let subviewSize = subview.sizeThatFits(.unspecified)
-
-                if currentX + subviewSize.width > maxWidth && currentX > 0 {
-                    // Move to next line
-                    currentX = 0
-                    currentY += lineHeight + spacing
-                    lineHeight = 0
-                }
-
-                positions.append(CGPoint(x: currentX, y: currentY))
-                currentX += subviewSize.width + spacing
-                lineHeight = max(lineHeight, subviewSize.height)
-            }
-
-            size = CGSize(
-                width: maxWidth,
-                height: currentY + lineHeight
-            )
-        }
-    }
-}
-
 // MARK: - Preview
 
 #Preview {
@@ -410,3 +354,4 @@ struct FlowLayout: Layout {
     )
     .presentationDetents([.medium, .large])
 }
+

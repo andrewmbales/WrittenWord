@@ -677,7 +677,6 @@ struct ChapterView: View {
         // Find the book, chapter, and verse to navigate to
         let bookName = verseRef.fullBookName
         let chapterNumber = verseRef.chapter
-        let verseNumber = verseRef.verse
 
         // Fetch the book
         let bookDescriptor = FetchDescriptor<Book>(
@@ -747,3 +746,4 @@ struct CanvasViewRepresentable: UIViewRepresentable {
         }
     }
 }
+

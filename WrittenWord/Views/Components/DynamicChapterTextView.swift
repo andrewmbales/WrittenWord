@@ -53,9 +53,6 @@ struct DynamicChapterTextView: UIViewRepresentable {
     private func buildAttributedText() -> NSAttributedString {
         let result = NSMutableAttributedString()
 
-        // Track character positions for verse mapping
-        var currentPosition = 0
-
         for (index, verse) in verses.enumerated() {
             // Add verse number as superscript
             let verseNumber = NSMutableAttributedString(string: "\(verse.number) ")
@@ -165,7 +162,6 @@ struct DynamicChapterTextView: UIViewRepresentable {
 
         private func findVerse(at position: Int, in attributedText: NSAttributedString) -> Verse? {
             var currentPos = 0
-            let text = attributedText.string
 
             for verse in verses {
                 // Account for verse number and space
@@ -222,3 +218,4 @@ extension Color {
         UIColor(self)
     }
 }
+
