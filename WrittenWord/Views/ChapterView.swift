@@ -72,42 +72,21 @@ struct ChapterView: View {
 
     var body: some View {
         ZStack {
-            // Main content
+            // Main content - Dynamic flowing text
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(sortedVerses) { verse in
-                        VerseRow(
-                            verse: verse,
-                            fontSize: fontSize,
-                            lineSpacing: lineSpacing,
-                            fontFamily: fontFamily,
-                            colorTheme: colorTheme,
-                            notePosition: notePosition,
-                            isAnnotationMode: selectedTool != .none,
-                            onTextSelected: { range, text in
-                                handleTextSelection(verse: verse, range: range, text: text)
-                            },
-                            onBookmark: {
-                                bookmarkVerse(verse)
-                            }
-                        )
-                        .padding(.vertical, lineSpacing / 2)
-                        .padding(.leading, notePosition == .left ? 240 : 20)
-                        .padding(.trailing, notePosition == .right ? 240 : 20)
-                        .background(
-                            selectedVerses.contains(verse.id) ?
-                            Color.accentColor.opacity(0.15) : Color.clear
-                        )
-                        .cornerRadius(8)
-                        .onTapGesture {
-                            if isMultiSelectMode {
-                                toggleVerseSelection(verse)
-                            }
-                        }
+                DynamicChapterTextView(
+                    verses: sortedVerses,
+                    highlights: allHighlights,
+                    fontSize: fontSize,
+                    fontFamily: fontFamily,
+                    lineSpacing: lineSpacing,
+                    colorTheme: colorTheme,
+                    onTextSelected: { verse, range, text in
+                        handleTextSelection(verse: verse, range: range, text: text)
                     }
-                }
-                .padding(.vertical)
+                )
             }
+            .background(colorTheme.backgroundColor)
 
             // Annotation canvas overlay
             AnnotationCanvasView(
