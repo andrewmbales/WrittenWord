@@ -3,13 +3,14 @@
 //  WrittenWord
 //
 //  Dynamic flowing text view that displays chapter verses as continuous text
+//  FIXED: Proper height calculation for SwiftUI layout
 //
 
 import SwiftUI
 import SwiftData
 import UIKit
 
-struct DynamicChapterTextView: UIViewRepresentable {
+struct DynamicChapterTextView: View {
     let verses: [Verse]
     let highlights: [Highlight]
     let fontSize: Double
@@ -18,8 +19,34 @@ struct DynamicChapterTextView: UIViewRepresentable {
     let colorTheme: ColorTheme
     let onTextSelected: (Verse, NSRange, String) -> Void
 
-    func makeUIView(context: Context) -> UITextView {
-        let textView = UITextView()
+    var body: some View {
+        GeometryReader { geometry in
+            DynamicTextViewRepresentable(
+                verses: verses,
+                highlights: highlights,
+                fontSize: fontSize,
+                fontFamily: fontFamily,
+                lineSpacing: lineSpacing,
+                colorTheme: colorTheme,
+                availableWidth: geometry.size.width,
+                onTextSelected: onTextSelected
+            )
+        }
+    }
+}
+
+struct DynamicTextViewRepresentable: UIViewRepresentable {
+    let verses: [Verse]
+    let highlights: [Highlight]
+    let fontSize: Double
+    let fontFamily: FontFamily
+    let lineSpacing: Double
+    let colorTheme: ColorTheme
+    let availableWidth: CGFloat
+    let onTextSelected: (Verse, NSRange, String) -> Void
+
+    func makeUIView(context: Context) -> WrappedTextView {
+        let textView = WrappedTextView()
         textView.delegate = context.coordinator
         textView.isEditable = false
         textView.isScrollEnabled = false
@@ -27,21 +54,40 @@ struct DynamicChapterTextView: UIViewRepresentable {
         textView.textContainerInset = UIEdgeInsets(top: 12, left: 20, bottom: 12, right: 20)
         textView.textContainer.lineFragmentPadding = 0
 
+        // Critical: Set text container to use the provided width
+        textView.textContainer.lineBreakMode = .byWordWrapping
+        textView.textContainer.maximumNumberOfLines = 0
+
         // Enable text selection
         textView.isSelectable = true
+
+        // Disable automatic size adjustment
+        textView.setContentHuggingPriority(.defaultHigh, for: .vertical)
+        textView.setContentCompressionResistancePriority(.required, for: .vertical)
 
         return textView
     }
 
-    func updateUIView(_ textView: UITextView, context: Context) {
+    func updateUIView(_ textView: WrappedTextView, context: Context) {
         // Update coordinator with current verses
         context.coordinator.verses = verses
 
         // Build attributed string
         let attributedText = buildAttributedText()
+
+        // Set the width constraint BEFORE setting text
+        let effectiveWidth = availableWidth - textView.textContainerInset.left - textView.textContainerInset.right
+        textView.textContainer.size = CGSize(width: effectiveWidth, height: .greatestFiniteMagnitude)
+
+        // Set the attributed text
         textView.attributedText = attributedText
 
-        // Force layout
+        // Calculate the required height
+        let size = textView.sizeThatFits(CGSize(width: availableWidth, height: .greatestFiniteMagnitude))
+        textView.calculatedHeight = size.height
+
+        // Force layout update
+        textView.invalidateIntrinsicContentSize()
         textView.setNeedsLayout()
         textView.layoutIfNeeded()
     }
@@ -122,11 +168,11 @@ struct DynamicChapterTextView: UIViewRepresentable {
     }
 
     class Coordinator: NSObject, UITextViewDelegate {
-        var parent: DynamicChapterTextView
+        var parent: DynamicTextViewRepresentable
         var verses: [Verse]
         private var selectionDebounceTask: Task<Void, Never>?
 
-        init(_ parent: DynamicChapterTextView) {
+        init(_ parent: DynamicTextViewRepresentable) {
             self.parent = parent
             self.verses = parent.verses
         }
@@ -203,6 +249,20 @@ struct DynamicChapterTextView: UIViewRepresentable {
 
             return NSRange(location: 0, length: 0)
         }
+    }
+}
+
+// MARK: - Custom UITextView with Intrinsic Content Size
+
+class WrappedTextView: UITextView {
+    var calculatedHeight: CGFloat = 0 {
+        didSet {
+            invalidateIntrinsicContentSize()
+        }
+    }
+
+    override var intrinsicContentSize: CGSize {
+        return CGSize(width: UIView.noIntrinsicMetric, height: calculatedHeight)
     }
 }
 
