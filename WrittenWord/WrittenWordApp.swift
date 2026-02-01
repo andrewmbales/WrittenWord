@@ -57,9 +57,24 @@ struct WrittenWordApp: App {
 func seedDataIfNeeded(container: ModelContainer) async {
     @AppStorage("didSeedData") var didSeedData: Bool = false
     
+    // ⚠️ TEMPORARY: DELETE ALL DATA
+    let modelContext = container.mainContext
+    do {
+        let allBooks = try modelContext.fetch(FetchDescriptor<Book>())
+        for book in allBooks {
+            modelContext.delete(book)
+        }
+        try modelContext.save()
+        didSeedData = false
+        print("🗑️ Deleted all books")
+    } catch {
+        print("❌ Error: \(error)")
+    }
+    // ⚠️ END TEMPORARY
+
     print("🌱 Seeding started. didSeedData: \(didSeedData)")
     
-    let modelContext = container.mainContext
+    // let modelContext = container.mainContext
     do {
         // Check if any books actually exist in the database
         let fetch = FetchDescriptor<Book>(predicate: nil)
@@ -153,6 +168,11 @@ func seedDataIfNeeded(container: ModelContainer) async {
         try await seedSampleInterlinearData(modelContext: modelContext)
 
         didSeedData = true
+
+        // Seed expanded interlinear data
+print("🔤 Seeding interlinear data...")
+try await seedExpandedInterlinearData(modelContext: modelContext)
+print("✅ Interlinear data seeded!")
 
         // Verify
         let savedBooks = try modelContext.fetch(FetchDescriptor<Book>())

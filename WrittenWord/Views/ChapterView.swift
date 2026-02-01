@@ -70,11 +70,16 @@ struct ChapterView: View {
         allNotes.first { $0.chapter?.id == chapter.id }
     }
 
+    /*var body: some View {
+        FeatureTestView(chapter: chapter)
+     }*/
+
+    
     var body: some View {
         ZStack {
             // CRITICAL FIX: Proper content layout
             ScrollView {
-                SimpleChapterTextView(
+                ImprovedTappableChapterTextView(
                     verses: sortedVerses,
                     highlights: allHighlights,
                     fontSize: fontSize,

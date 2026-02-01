@@ -2,14 +2,6 @@
 //  FlowLayout.swift
 //  WrittenWord
 //
-//  Created by Andrew Bales on 1/31/26.
-//
-
-
-//
-//  FlowLayout.swift
-//  WrittenWord
-//
 //  Shared flow layout for wrapping views across multiple lines
 //
 
@@ -18,7 +10,7 @@ import SwiftUI
 /// Flow layout for wrapping words across multiple lines
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
-
+    
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let result = FlowResult(
             in: proposal.replacingUnspecifiedDimensions().width,
@@ -27,7 +19,7 @@ struct FlowLayout: Layout {
         )
         return result.size
     }
-
+    
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let result = FlowResult(
             in: bounds.width,
@@ -35,40 +27,38 @@ struct FlowLayout: Layout {
             spacing: spacing
         )
         for (index, subview) in subviews.enumerated() {
-            subview.place(at: CGPoint(x: bounds.minX + result.positions[index].x,
-                                     y: bounds.minY + result.positions[index].y),
-                         proposal: .unspecified)
+            subview.place(
+                at: CGPoint(x: bounds.minX + result.positions[index].x,
+                           y: bounds.minY + result.positions[index].y),
+                proposal: .unspecified
+            )
         }
     }
-
+    
     struct FlowResult {
         var size: CGSize = .zero
         var positions: [CGPoint] = []
-
+        
         init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
             var currentX: CGFloat = 0
             var currentY: CGFloat = 0
             var lineHeight: CGFloat = 0
-
+            
             for subview in subviews {
                 let size = subview.sizeThatFits(.unspecified)
-
+                
                 if currentX + size.width > maxWidth && currentX > 0 {
-                    // Move to next line
                     currentX = 0
                     currentY += lineHeight + spacing
                     lineHeight = 0
                 }
-
+                
                 positions.append(CGPoint(x: currentX, y: currentY))
                 currentX += size.width + spacing
                 lineHeight = max(lineHeight, size.height)
             }
-
-            self.size = CGSize(
-                width: maxWidth,
-                height: currentY + lineHeight
-            )
+            
+            self.size = CGSize(width: maxWidth, height: currentY + lineHeight)
         }
     }
 }
