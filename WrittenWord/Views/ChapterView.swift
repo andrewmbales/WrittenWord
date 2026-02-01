@@ -2,7 +2,7 @@
 //  ChapterView.swift
 //  WrittenWord
 //
-//  Enhanced chapter display with interlinear word lookup and annotation support
+//  FIXED: Proper chapter display with full text rendering
 //
 
 import SwiftUI
@@ -72,9 +72,9 @@ struct ChapterView: View {
 
     var body: some View {
         ZStack {
-            // Main content - Dynamic flowing text
+            // CRITICAL FIX: Proper content layout
             ScrollView {
-                DynamicChapterTextView(
+                SimpleChapterTextView(
                     verses: sortedVerses,
                     highlights: allHighlights,
                     fontSize: fontSize,
@@ -85,6 +85,7 @@ struct ChapterView: View {
                         handleTextSelection(verse: verse, range: range, text: text)
                     }
                 )
+                .frame(maxWidth: .infinity, alignment: .topLeading)  // ← ADD THIS LINE
             }
             .background(colorTheme.backgroundColor)
 
@@ -251,12 +252,10 @@ struct ChapterView: View {
     private var searchView: some View {
         NavigationView {
             VStack(spacing: 20) {
-                // Search bar
                 TextField("Search...", text: $searchText)
                     .textFieldStyle(.roundedBorder)
                     .padding(.horizontal)
 
-                // Search scope picker
                 Picker("Search Scope", selection: $searchScope) {
                     Text("Current Book").tag(SearchScope.currentBook)
                     Text("All Books").tag(SearchScope.all)
@@ -264,7 +263,6 @@ struct ChapterView: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
 
-                // Search results would go here
                 if !searchText.isEmpty {
                     Text("Search feature coming soon")
                         .foregroundColor(.secondary)
@@ -289,37 +287,31 @@ struct ChapterView: View {
     }
 
     private func handleTextSelection(verse: Verse, range: NSRange, text: String) {
-        // Notify parent that user interacted with verses (for sidebar collapse)
         onVerseInteraction?()
 
         selectedVerse = verse
         selectedRange = range
         selectedText = text
 
-        // Cancel any pending debounce task
         selectionDebounceTask?.cancel()
 
-        // Debounce the menu display to allow multi-word selection
         selectionDebounceTask = Task { @MainActor in
             do {
-                try await Task.sleep(nanoseconds: 500_000_000) // 500ms delay
+                try await Task.sleep(nanoseconds: 500_000_000)
 
                 if !Task.isCancelled {
-                    // Check if we have interlinear data for this word
                     selectedWord = WordLookupService.findWord(in: verse, for: range)
 
-                    // If we have a single word with interlinear data, show the lexicon-style bottom sheet
                     if let word = selectedWord {
                         let lexiconService = LexiconService(modelContext: modelContext)
                         lexiconEntry = lexiconService.getLexiconEntry(for: word)
                         showInterlinearBottomSheet = true
                     } else {
-                        // Show unified selection menu for multi-word selections or no interlinear data
                         showUnifiedSelectionMenu = true
                     }
                 }
             } catch {
-                // Task was cancelled, do nothing
+                // Task cancelled
             }
         }
     }
@@ -332,12 +324,8 @@ struct ChapterView: View {
     }
 
     private func createOrToggleHighlight(color: HighlightColor) {
-        guard let verse = selectedVerse,
-              let range = selectedRange else {
-            return
-        }
+        guard let verse = selectedVerse, let range = selectedRange else { return }
 
-        // Check if identical highlight exists (same verse, range, and color)
         let existingHighlight = allHighlights.first { highlight in
             highlight.verseId == verse.id &&
             highlight.startIndex == range.location &&
@@ -346,10 +334,8 @@ struct ChapterView: View {
         }
 
         if let existingHighlight = existingHighlight {
-            // Toggle off: remove the highlight
             modelContext.delete(existingHighlight)
         } else {
-            // Create new highlight
             let highlight = Highlight(
                 verseId: verse.id,
                 startIndex: range.location,
@@ -362,18 +348,13 @@ struct ChapterView: View {
         }
 
         try? modelContext.save()
-
         showUnifiedSelectionMenu = false
         clearSelection()
     }
 
     private func removeHighlight(color: HighlightColor) {
-        guard let verse = selectedVerse,
-              let range = selectedRange else {
-            return
-        }
+        guard let verse = selectedVerse, let range = selectedRange else { return }
 
-        // Find and remove the specific highlight
         let highlightToRemove = allHighlights.first { highlight in
             highlight.verseId == verse.id &&
             highlight.startIndex == range.location &&
@@ -396,17 +377,6 @@ struct ChapterView: View {
         return uiColor1.cgColor.components?.dropLast() == uiColor2.cgColor.components?.dropLast()
     }
 
-    private func bookmarkVerse(_ verse: Verse) {
-        let bookmark = Bookmark(
-            title: "",
-            verse: verse,
-            category: BookmarkCategory.general.rawValue,
-            color: BookmarkCategory.general.color
-        )
-        modelContext.insert(bookmark)
-        try? modelContext.save()
-    }
-
     private func loadDrawing() {
         if let note = chapterNote, !note.drawing.strokes.isEmpty {
             drawing = note.drawing
@@ -415,14 +385,11 @@ struct ChapterView: View {
     }
 
     private func saveDrawing() {
-        // Only save if there's actual content
         guard !drawing.bounds.isEmpty else { return }
 
         if let note = chapterNote {
-            // Update existing note
             note.drawing = drawing
         } else {
-            // Create new note for chapter
             let note = Note(
                 title: "",
                 content: "",
@@ -438,20 +405,11 @@ struct ChapterView: View {
         try? modelContext.save()
     }
 
-    private func toggleVerseSelection(_ verse: Verse) {
-        if selectedVerses.contains(verse.id) {
-            selectedVerses.remove(verse.id)
-        } else {
-            selectedVerses.insert(verse.id)
-        }
-    }
-
     private var multiHighlightPaletteView: some View {
         VStack(spacing: 20) {
             Text("Highlight \(selectedVerses.count) Verse\(selectedVerses.count == 1 ? "" : "s")")
                 .font(.headline)
 
-            // Color palette
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 60))], spacing: 12) {
                 ForEach(HighlightColor.allCases, id: \.self) { color in
                     Button {
@@ -470,7 +428,6 @@ struct ChapterView: View {
             }
             .padding()
 
-            // Remove highlights button
             if selectedVersesHaveHighlights() {
                 Button(role: .destructive) {
                     removeHighlightsFromSelectedVerses()
@@ -504,7 +461,6 @@ struct ChapterView: View {
 
     private func removeHighlightsFromSelectedVerses() {
         for verseId in selectedVerses {
-            // Find and delete all highlights for this verse
             let highlights = allHighlights.filter { $0.verseId == verseId }
             for highlight in highlights {
                 modelContext.delete(highlight)
@@ -513,17 +469,14 @@ struct ChapterView: View {
 
         try? modelContext.save()
 
-        // Clean up
         showMultiHighlightPalette = false
         isMultiSelectMode = false
         selectedVerses.removeAll()
     }
 
     private func createMultiHighlight(color: HighlightColor) {
-        // Create or toggle highlight for the entire text of each selected verse
         for verseId in selectedVerses {
             if let verse = sortedVerses.first(where: { $0.id == verseId }) {
-                // Check if identical highlight exists for this verse
                 let existingHighlight = allHighlights.first { highlight in
                     highlight.verseId == verse.id &&
                     highlight.startIndex == 0 &&
@@ -532,10 +485,8 @@ struct ChapterView: View {
                 }
 
                 if let existingHighlight = existingHighlight {
-                    // Toggle off: remove the highlight
                     modelContext.delete(existingHighlight)
                 } else {
-                    // Create new highlight
                     let highlight = Highlight(
                         verseId: verse.id,
                         startIndex: 0,
@@ -551,7 +502,6 @@ struct ChapterView: View {
 
         try? modelContext.save()
 
-        // Clean up
         showMultiHighlightPalette = false
         isMultiSelectMode = false
         selectedVerses.removeAll()
@@ -560,13 +510,11 @@ struct ChapterView: View {
     private var noteEditorView: some View {
         NavigationView {
             VStack(spacing: 20) {
-                // Title field
                 TextField("Note Title", text: $noteTitle)
                     .font(.headline)
                     .textFieldStyle(.roundedBorder)
                     .padding(.horizontal)
 
-                // Mode toggle
                 Picker("Note Type", selection: $isHandwrittenMode) {
                     Label("Typed", systemImage: "keyboard").tag(false)
                     Label("Handwritten", systemImage: "pencil.tip.crop.circle").tag(true)
@@ -574,9 +522,7 @@ struct ChapterView: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
 
-                // Content area
                 if isHandwrittenMode {
-                    // Handwritten canvas
                     CanvasViewRepresentable(canvasView: $noteCanvasView, drawing: $noteDrawing)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
@@ -584,7 +530,6 @@ struct ChapterView: View {
                         )
                         .padding(.horizontal)
                 } else {
-                    // Typed text editor
                     TextEditor(text: $noteContent)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .overlay(
@@ -639,46 +584,35 @@ struct ChapterView: View {
         modelContext.insert(note)
         try? modelContext.save()
 
-        // Clean up
         clearNoteEditor()
     }
 
-    // MARK: - InterlinearBottomSheet Action Handlers
-
     private func copyWordToClipboard() {
         guard let word = selectedWord else { return }
-
         let copyText = """
         \(word.originalText) (\(word.transliteration))
         \(word.gloss)
         """
-
         UIPasteboard.general.string = copyText
     }
 
     private func openNoteEditorForWord() {
         guard let word = selectedWord else { return }
-
-        // Pre-populate note title with word info
         noteTitle = "\(word.originalText) (\(word.transliteration))"
         noteContent = "Word: \(word.originalText)\nMeaning: \(word.gloss)\n\n"
-
         showInterlinearBottomSheet = false
         showingNoteEditor = true
     }
 
     private func openHighlightMenuForWord() {
-        // Close the interlinear sheet and show the unified selection menu for highlighting
         showInterlinearBottomSheet = false
         showUnifiedSelectionMenu = true
     }
 
     private func navigateToVerse(_ verseRef: VerseReference) {
-        // Find the book, chapter, and verse to navigate to
         let bookName = verseRef.fullBookName
         let chapterNumber = verseRef.chapter
 
-        // Fetch the book
         let bookDescriptor = FetchDescriptor<Book>(
             predicate: #Predicate { book in
                 book.name == bookName
@@ -692,20 +626,13 @@ struct ChapterView: View {
                 return
             }
 
-            // Find the chapter
             guard let targetChapter = book.chapters.first(where: { $0.number == chapterNumber }) else {
                 print("Chapter not found: \(chapterNumber)")
                 return
             }
 
-            // Close the bottom sheet
             showInterlinearBottomSheet = false
-
-            // Navigate to the chapter
             onChapterChange(targetChapter)
-
-            // Note: Scrolling to a specific verse would require additional implementation
-            // with ScrollViewReader and verse IDs
         } catch {
             print("Error fetching book: \(error)")
         }
@@ -746,4 +673,3 @@ struct CanvasViewRepresentable: UIViewRepresentable {
         }
     }
 }
-

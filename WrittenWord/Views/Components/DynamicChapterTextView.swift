@@ -2,7 +2,8 @@
 //  DynamicChapterTextView.swift
 //  WrittenWord
 //
-//  Dynamic flowing text view that displays chapter verses as continuous text
+//  FIXED: Proper text display with full width tracking
+//  KEEPS: All existing features (selection, highlights, word lookup)
 //
 
 import SwiftUI
@@ -24,26 +25,35 @@ struct DynamicChapterTextView: UIViewRepresentable {
         textView.isEditable = false
         textView.isScrollEnabled = false
         textView.backgroundColor = .clear
-        textView.textContainerInset = UIEdgeInsets(top: 12, left: 20, bottom: 12, right: 20)
+        
+        textView.textContainerInset = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
         textView.textContainer.lineFragmentPadding = 0
-
-        // Enable text selection
+        
+        // ✅ FIX: Enable proper text wrapping and width tracking
+        textView.textContainer.lineBreakMode = .byWordWrapping
+        textView.textContainer.maximumNumberOfLines = 0
+        textView.textContainer.widthTracksTextView = true  // ← KEY FIX
+        
         textView.isSelectable = true
+        textView.isUserInteractionEnabled = true
 
         return textView
     }
 
     func updateUIView(_ textView: UITextView, context: Context) {
-        // Update coordinator with current verses
         context.coordinator.verses = verses
-
-        // Build attributed string
+        
         let attributedText = buildAttributedText()
         textView.attributedText = attributedText
 
-        // Force layout
+        // ✅ FIX: Force proper layout
+        textView.textContainer.lineBreakMode = .byWordWrapping
+        textView.textContainer.maximumNumberOfLines = 0
+        
         textView.setNeedsLayout()
         textView.layoutIfNeeded()
+        textView.invalidateIntrinsicContentSize()
+        textView.sizeToFit()  // ← KEY FIX
     }
 
     func makeCoordinator() -> Coordinator {
@@ -57,9 +67,9 @@ struct DynamicChapterTextView: UIViewRepresentable {
             // Add verse number as superscript
             let verseNumber = NSMutableAttributedString(string: "\(verse.number) ")
             verseNumber.addAttributes([
-                .font: UIFont.systemFont(ofSize: fontSize * 0.6, weight: .medium),
-                .foregroundColor: UIColor.secondaryLabel,
-                .baselineOffset: fontSize * 0.3
+                .font: UIFont.systemFont(ofSize: fontSize * 0.65, weight: .semibold),
+                .foregroundColor: UIColor.systemGray,
+                .baselineOffset: fontSize * 0.35
             ], range: NSRange(location: 0, length: verseNumber.length))
 
             result.append(verseNumber)
@@ -70,7 +80,8 @@ struct DynamicChapterTextView: UIViewRepresentable {
             // Apply base styling
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.lineSpacing = lineSpacing
-            paragraphStyle.paragraphSpacing = 4
+            paragraphStyle.paragraphSpacing = 6
+            paragraphStyle.lineBreakMode = .byWordWrapping
 
             let font: UIFont
             switch fontFamily {
@@ -79,7 +90,8 @@ struct DynamicChapterTextView: UIViewRepresentable {
             case .serif:
                 font = UIFont(name: "Georgia", size: fontSize) ?? UIFont.systemFont(ofSize: fontSize)
             case .rounded:
-                font = UIFont.systemFont(ofSize: fontSize, weight: .regular).withTraits(.traitBold, size: fontSize, design: .rounded)
+                font = UIFont.systemFont(ofSize: fontSize, weight: .regular)
+                    .withTraits(.traitBold, size: fontSize, design: .rounded)
             case .monospaced:
                 font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
             }
@@ -98,7 +110,8 @@ struct DynamicChapterTextView: UIViewRepresentable {
                     length: highlight.endIndex - highlight.startIndex
                 )
 
-                if highlightRange.location + highlightRange.length <= verseText.length {
+                if highlightRange.location >= 0 && 
+                   highlightRange.location + highlightRange.length <= verseText.length {
                     verseText.addAttribute(
                         .backgroundColor,
                         value: UIColor(highlight.highlightColor),
@@ -109,7 +122,7 @@ struct DynamicChapterTextView: UIViewRepresentable {
 
             result.append(verseText)
 
-            // Add space between verses
+            // Add space between verses (but not after the last one)
             if index < verses.count - 1 {
                 result.append(NSAttributedString(string: " "))
             }
@@ -149,7 +162,7 @@ struct DynamicChapterTextView: UIViewRepresentable {
                 selectionDebounceTask?.cancel()
                 selectionDebounceTask = Task { @MainActor in
                     do {
-                        try await Task.sleep(nanoseconds: 500_000_000) // 500ms
+                        try await Task.sleep(nanoseconds: 300_000_000) // 300ms
                         if !Task.isCancelled {
                             parent.onTextSelected(verse, relativeRange, selectedText)
                         }
@@ -218,4 +231,3 @@ extension Color {
         UIColor(self)
     }
 }
-
