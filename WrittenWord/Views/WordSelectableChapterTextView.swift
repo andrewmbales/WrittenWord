@@ -1,9 +1,8 @@
 //
-//  WordSelectableChapterTextView.swift
+//  WordSelectableChapterTextView.swift - FIXED
 //  WrittenWord
 //
-//  UITextView-based chapter display with word-level text selection
-//  Enables precise highlighting and word lookup
+//  Fixed height calculation to show all text properly
 //
 
 import SwiftUI
@@ -23,24 +22,28 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
         let textView = UITextView()
         textView.delegate = context.coordinator
         textView.isEditable = false
-        textView.isScrollEnabled = false
+        textView.isScrollEnabled = false  // CRITICAL - let parent ScrollView handle scrolling
         textView.backgroundColor = .clear
         
         // Proper insets for readability
         textView.textContainerInset = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
         textView.textContainer.lineFragmentPadding = 0
         
-        // Enable proper text wrapping
+        // Enable proper text wrapping - CRITICAL for multi-line display
         textView.textContainer.lineBreakMode = .byWordWrapping
         textView.textContainer.maximumNumberOfLines = 0
         textView.textContainer.widthTracksTextView = true
         
-        // Enable text selection - THIS IS KEY
+        // Enable text selection
         textView.isSelectable = true
         textView.isUserInteractionEnabled = true
         
         // Customize selection appearance
         textView.tintColor = UIColor.systemBlue
+        
+        // CRITICAL: Set content hugging and compression resistance
+        textView.setContentHuggingPriority(.defaultLow, for: .vertical)
+        textView.setContentCompressionResistancePriority(.required, for: .vertical)
         
         return textView
     }
@@ -53,52 +56,69 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
         let attributedText = buildAttributedText()
         textView.attributedText = attributedText
         
-        // Force proper layout
+        // Force proper layout - CRITICAL
         textView.textContainer.lineBreakMode = .byWordWrapping
         textView.textContainer.maximumNumberOfLines = 0
         
+        // Ensure proper sizing
+        textView.sizeToFit()
         textView.setNeedsLayout()
         textView.layoutIfNeeded()
-        textView.invalidateIntrinsicContentSize()
-        textView.sizeToFit()
     }
     
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
     
+    // MARK: - Sizing Hint
+    // This tells SwiftUI how big the view wants to be
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        guard let width = proposal.width else { return nil }
+        
+        // Calculate the height needed for all content
+        let size = CGSize(width: width, height: .infinity)
+        let boundingRect = uiView.attributedText.boundingRect(
+            with: size,
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            context: nil
+        )
+        
+        return CGSize(
+            width: width,
+            height: ceil(boundingRect.height) + 40  // Add padding
+        )
+    }
+    
     private func buildAttributedText() -> NSAttributedString {
         let result = NSMutableAttributedString()
         
         for (index, verse) in verses.enumerated() {
-            // Add verse number as superscript
+            // Verse number
             let verseNumber = NSMutableAttributedString(string: "\(verse.number) ")
             verseNumber.addAttributes([
-                .font: UIFont.systemFont(ofSize: fontSize * 0.65, weight: .semibold),
-                .foregroundColor: UIColor.systemGray,
-                .baselineOffset: fontSize * 0.35
+                .font: UIFont.boldSystemFont(ofSize: fontSize * 0.75),
+                .foregroundColor: UIColor.secondaryLabel
             ], range: NSRange(location: 0, length: verseNumber.length))
             
             result.append(verseNumber)
             
-            // Add verse text
+            // Verse text
             let verseText = NSMutableAttributedString(string: verse.text)
             
-            // Apply base styling
+            // Paragraph style for line spacing
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.lineSpacing = lineSpacing
-            paragraphStyle.paragraphSpacing = 6
             paragraphStyle.lineBreakMode = .byWordWrapping
             
+            // Font selection
             let font: UIFont
             switch fontFamily {
             case .system:
                 font = UIFont.systemFont(ofSize: fontSize)
             case .serif:
-                font = UIFont(name: "Georgia", size: fontSize) ?? UIFont.systemFont(ofSize: fontSize)
+                font = UIFont(name: "NewYorkSerif", size: fontSize) ?? UIFont.systemFont(ofSize: fontSize)
             case .rounded:
                 font = UIFont.systemFont(ofSize: fontSize, weight: .regular)
-                    .withTraits(.traitBold, size: fontSize, design: .rounded)
             case .monospaced:
                 font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
             }
@@ -129,9 +149,9 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
             
             result.append(verseText)
             
-            // Add space between verses
+            // Add newline between verses
             if index < verses.count - 1 {
-                result.append(NSAttributedString(string: " "))
+                result.append(NSAttributedString(string: "\n"))
             }
         }
         
@@ -186,7 +206,7 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
             for verse in verses {
                 let verseNumberLength = "\(verse.number) ".count
                 let verseTextLength = verse.text.count
-                let totalLength = verseNumberLength + verseTextLength + 1
+                let totalLength = verseNumberLength + verseTextLength + 1  // +1 for newline
                 
                 if position >= currentPos && position < currentPos + totalLength {
                     return verse
@@ -212,7 +232,7 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
                 }
                 
                 let verseTextLength = v.text.count
-                currentPos += verseNumberLength + verseTextLength + 1
+                currentPos += verseNumberLength + verseTextLength + 1  // +1 for newline
             }
             
             return NSRange(location: 0, length: 0)
@@ -236,35 +256,3 @@ extension Color {
         UIColor(self)
     }
 }
-
-// MARK: - Usage Instructions
-/*
- This view combines the best of both worlds:
- - Continuous flowing text like DynamicChapterTextView
- - Working text selection that triggers callbacks
- - Word-level precision for highlighting
- 
- TO USE:
- 
- In ChapterView.swift, replace:
-     SelectableChapterTextView(
- 
- With:
-     WordSelectableChapterTextView(
- 
- FEATURES:
- ✅ Select any text (word, phrase, multiple verses)
- ✅ Selection triggers highlight menu
- ✅ Selection triggers word lookup (if data exists)
- ✅ Highlights display correctly
- ✅ Highlights persist
- ✅ Professional Bible app appearance
- 
- HOW IT WORKS:
- - User selects text
- - textViewDidChangeSelection fires
- - Finds which verse contains the selection
- - Converts to verse-relative range
- - Calls onTextSelected callback
- - ChapterView shows appropriate menu (highlight or word lookup)
- */
