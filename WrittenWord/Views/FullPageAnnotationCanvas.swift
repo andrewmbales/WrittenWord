@@ -26,6 +26,9 @@ struct FullPageAnnotationCanvas: UIViewRepresentable {
         case .eraser:
             uiView.tool = PKEraserTool(.vector)
             uiView.isUserInteractionEnabled = true
+        case .lasso:
+            uiView.tool = PKEraserTool(.bitmap)
+            uiView.isUserInteractionEnabled = true
         case .none:
             uiView.tool = PKInkingTool(.pen, color: .clear, width: 0.1)
             uiView.isUserInteractionEnabled = false
@@ -37,29 +40,51 @@ struct FullPageAnnotationCanvas: UIViewRepresentable {
 
 extension UIColor {
     convenience init(_ color: Color) {
-        self.init(color)
+        // Convert SwiftUI Color to UIColor using color resolution
+        // This requires iOS 17+ for the resolve method
+        if #available(iOS 17.0, *) {
+            let resolved = color.resolve(in: EnvironmentValues())
+            self.init(
+                red: Double(resolved.red),
+                green: Double(resolved.green),
+                blue: Double(resolved.blue),
+                alpha: Double(resolved.opacity)
+            )
+        } else {
+            // Fallback for iOS 16 and earlier
+            // Use a temporary UIHostingController to get the UIColor
+            let view = UIHostingController(rootView: Rectangle().foregroundColor(color))
+            view.view.layoutIfNeeded()
+            if let cgColor = view.view.layer.backgroundColor {
+                self.init(cgColor: cgColor)
+            } else {
+                // Final fallback to black
+                self.init(red: 0, green: 0, blue: 0, alpha: 1)
+            }
+        }
+    }
+}
+
+struct FullPageAnnotationCanvas_PreviewWrapper: View {
+    @State private var canvasView = PKCanvasView()
+    @State private var tool: DrawingTool = .pen
+    @State private var color: Color = .blue
+    @State private var width: CGFloat = 5.0
+    let note = Note()
+
+    var body: some View {
+        FullPageAnnotationCanvas(
+            note: note,
+            selectedTool: tool,
+            selectedColor: color,
+            penWidth: width,
+            canvasView: $canvasView
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.gray.opacity(0.1))
     }
 }
 
 #Preview {
-    struct PreviewWrapper: View {
-        @State private var canvasView = PKCanvasView()
-        @State private var tool: DrawingTool = .pen
-        @State private var color: Color = .blue
-        @State private var width: CGFloat = 5.0
-        let note = Note()
-
-        var body: some View {
-            FullPageAnnotationCanvas(
-                note: note,
-                selectedTool: tool,
-                selectedColor: color,
-                penWidth: width,
-                canvasView: $canvasView
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.gray.opacity(0.1))
-        }
-    }
-    PreviewWrapper()
+    FullPageAnnotationCanvas_PreviewWrapper()
 }

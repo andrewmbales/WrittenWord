@@ -41,12 +41,6 @@ struct MainView: View {
                         chapter: chapter,
                         onChapterChange: { newChapter in
                             selectedChapter = newChapter
-                        },
-                        onVerseInteraction: {
-                            // Auto-collapse sidebar when user interacts with verses
-                            withAnimation {
-                                columnVisibility = .detailOnly
-                            }
                         }
                     )
                     .id(chapter.id)

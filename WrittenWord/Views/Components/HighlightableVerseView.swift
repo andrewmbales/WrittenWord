@@ -70,7 +70,7 @@ struct SelectableTextView: UIViewRepresentable {
     let lineSpacing: Double
     @Binding var selectedRange: NSRange?
     let onHighlight: (NSRange, String) -> Void
-    
+
     func makeUIView(context: Context) -> UITextView {
         let textView = UITextView()
         textView.delegate = context.coordinator
@@ -81,20 +81,28 @@ struct SelectableTextView: UIViewRepresentable {
         textView.textContainer.lineFragmentPadding = 0
         textView.isSelectable = true
         textView.isUserInteractionEnabled = true
-        
-        // Enable text selection
+
+        // Enable text wrapping
         textView.textContainer.lineBreakMode = .byWordWrapping
         textView.textContainer.maximumNumberOfLines = 0
-        
+        textView.textContainer.widthTracksTextView = true
+
+        // Set proper content priorities for wrapping
+        textView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        textView.setContentHuggingPriority(.required, for: .vertical)
+        textView.setContentCompressionResistancePriority(.required, for: .vertical)
+        textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
         return textView
     }
-    
+
     func updateUIView(_ uiView: UITextView, context: Context) {
         // Build attributed text with proper line spacing
         let attributedText = buildAttributedText()
         uiView.attributedText = attributedText
-        
+
         // Force layout update to reflect line spacing changes
+        uiView.invalidateIntrinsicContentSize()
         uiView.setNeedsLayout()
         uiView.layoutIfNeeded()
     }
