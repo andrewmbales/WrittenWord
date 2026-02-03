@@ -19,9 +19,9 @@ struct ImprovedTappableChapterTextView: View {
     let lineSpacing: Double
     let colorTheme: ColorTheme
     let onTextSelected: (Verse, NSRange, String) -> Void
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: lineSpacing) {
+        VStack(alignment: .leading, spacing: 12) {
             ForEach(verses) { verse in
                 ImprovedTappableVerseView(
                     verse: verse,
@@ -255,26 +255,40 @@ struct ImprovedWordSelectionSheet: View {
         guard !indices.isEmpty else {
             return NSRange(location: 0, length: 0)
         }
-        
+
+        // Build the actual character positions for each word
+        let components = verse.text.components(separatedBy: .whitespaces)
+        var currentPosition = 0
+        var wordPositions: [(range: Range<String.Index>, cleanedWord: String)] = []
+
+        for component in components {
+            // Find the actual position in the original string
+            let searchStart = verse.text.index(verse.text.startIndex, offsetBy: currentPosition)
+            guard let componentRange = verse.text.range(of: component, range: searchStart..<verse.text.endIndex) else {
+                continue
+            }
+
+            let cleaned = component.trimmingCharacters(in: .punctuationCharacters)
+            if !cleaned.isEmpty {
+                wordPositions.append((range: componentRange, cleanedWord: cleaned))
+            }
+
+            currentPosition = verse.text.distance(from: verse.text.startIndex, to: componentRange.upperBound)
+        }
+
         let firstIndex = indices.first!
         let lastIndex = indices.last!
-        
-        let firstWord = words[firstIndex].word
-        let lastWord = words[lastIndex].word
-        
-        // Find first word position
-        guard let firstRange = verse.text.range(of: firstWord) else {
+
+        guard firstIndex < wordPositions.count && lastIndex < wordPositions.count else {
             return NSRange(location: 0, length: verse.text.count)
         }
-        
-        // Find last word position (search from first word onwards)
-        guard let lastRange = verse.text.range(of: lastWord, range: firstRange.lowerBound..<verse.text.endIndex) else {
-            return NSRange(location: 0, length: verse.text.count)
-        }
-        
-        let startOffset = verse.text.distance(from: verse.text.startIndex, to: firstRange.lowerBound)
-        let endOffset = verse.text.distance(from: verse.text.startIndex, to: lastRange.upperBound)
-        
+
+        let firstWordRange = wordPositions[firstIndex].range
+        let lastWordRange = wordPositions[lastIndex].range
+
+        let startOffset = verse.text.distance(from: verse.text.startIndex, to: firstWordRange.lowerBound)
+        let endOffset = verse.text.distance(from: verse.text.startIndex, to: lastWordRange.upperBound)
+
         return NSRange(location: startOffset, length: endOffset - startOffset)
     }
 }
