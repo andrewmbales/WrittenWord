@@ -6,5 +6,6 @@ public enum DrawingTool: Equatable {
     case pen
     case highlighter
     case eraser
+    case lasso
     case none
 }
