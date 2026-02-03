@@ -2,7 +2,7 @@
 //  ChapterView.swift
 //  WrittenWord
 //
-//  FIXED: Proper chapter display with full text rendering
+//  Optimized chapter view with MVVM pattern, line spacing support, and easy annotation access
 //
 
 import SwiftUI
@@ -11,665 +11,440 @@ import PencilKit
 
 struct ChapterView: View {
     let chapter: Chapter
-    let onChapterChange: (Chapter) -> Void
-    var onVerseInteraction: (() -> Void)? = nil
+    @State private var viewModel: ChapterViewModel?
+    @State private var canvasView = PKCanvasView()
+    @Environment(\.modelContext) private var modelContext
 
+    // Settings - now properly reactive to changes
     @AppStorage("fontSize") private var fontSize: Double = 16.0
     @AppStorage("lineSpacing") private var lineSpacing: Double = 6.0
-    @AppStorage("fontFamily") private var fontFamily: FontFamily = .system
     @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
-    @AppStorage("notePosition") private var notePosition: NotePosition = .right
+    @AppStorage("fontFamily") private var fontFamily: FontFamily = .system
 
-    @Environment(\.modelContext) private var modelContext
-    @Query private var allNotes: [Note]
-    @Query private var allHighlights: [Highlight]
-
-    // State for unified selection menu (interlinear + highlighting)
-    @State private var selectedWord: Word?
-    @State private var selectedVerse: Verse?
-    @State private var showUnifiedSelectionMenu = false
-    @State private var selectedText = ""
-    @State private var selectedRange: NSRange?
-    @State private var selectionDebounceTask: Task<Void, Never>?
-
-    // State for interlinear bottom sheet (lexicon-style word lookup)
-    @State private var showInterlinearBottomSheet = false
-    @State private var lexiconEntry: LexiconEntry?
-
-    // State for search
-    @State private var showSearch = false
-    @State private var searchText = ""
-    @State private var searchScope: SearchScope = .currentBook
-
-    // Multi-verse selection state
-    @State private var isMultiSelectMode = false
-    @State private var selectedVerses: Set<UUID> = []
-    @State private var showMultiHighlightPalette = false
-
-    // Annotation state
-    @State private var selectedTool: AnnotationTool = .none
-    @State private var selectedColor: Color = .black
-    @State private var penWidth: CGFloat = 2.0
-    @State private var showingColorPicker = false
-    @State private var canvasView = PKCanvasView()
-    @State private var drawing = PKDrawing()
-
-    // Long note state
-    @State private var showingNoteEditor = false
-    @State private var noteTitle = ""
-    @State private var noteContent = ""
-    @State private var noteDrawing = PKDrawing()
-    @State private var isHandwrittenMode = false
-    @State private var noteCanvasView = PKCanvasView()
-
-    private var sortedVerses: [Verse] {
-        chapter.verses.sorted { $0.number < $1.number }
+    let onChapterChange: (Chapter) -> Void
+    
+    // MARK: - Initialization
+    init(chapter: Chapter, onChapterChange: @escaping (Chapter) -> Void) {
+        self.chapter = chapter
+        self.onChapterChange = onChapterChange
     }
-
-    private var chapterNote: Note? {
-        allNotes.first { $0.chapter?.id == chapter.id }
-    }
-
+    
+    // MARK: - Body
     var body: some View {
-        ZStack {
-            // CRITICAL FIX: Proper content layout
-            ScrollView {
-                SimpleChapterTextView(
-                    verses: sortedVerses,
-                    highlights: allHighlights,
-                    fontSize: fontSize,
-                    fontFamily: fontFamily,
-                    lineSpacing: lineSpacing,
-                    colorTheme: colorTheme,
-                    onTextSelected: { verse, range, text in
-                        handleTextSelection(verse: verse, range: range, text: text)
-                    }
-                )
-                .frame(maxWidth: .infinity, alignment: .topLeading)  // ← ADD THIS LINE
-            }
-            .background(colorTheme.backgroundColor)
-
-            // Annotation canvas overlay
-            AnnotationCanvasView(
-                drawing: $drawing,
-                selectedTool: selectedTool,
-                selectedColor: selectedColor,
-                penWidth: penWidth,
-                canvasView: $canvasView
-            )
-            .allowsHitTesting(selectedTool != .none)
-        }
-        .navigationTitle("\(chapter.book?.name ?? "") \(chapter.number)")
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                if isMultiSelectMode {
-                    Button("Cancel") {
-                        isMultiSelectMode = false
-                        selectedVerses.removeAll()
-                    }
-                }
-            }
-
-            ToolbarItem(placement: .navigationBarTrailing) {
-                HStack(spacing: 16) {
-                    // Search button
-                    Button {
-                        showSearch = true
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                    }
-
-                    // Note button
-                    Button {
-                        showingNoteEditor = true
-                    } label: {
-                        Image(systemName: "note.text")
-                    }
-
-                    if !isMultiSelectMode {
-                        Button {
-                            isMultiSelectMode = true
-                        } label: {
-                            Image(systemName: "checkmark.circle")
-                        }
-                    } else if !selectedVerses.isEmpty {
-                        Button {
-                            showMultiHighlightPalette = true
-                        } label: {
-                            Image(systemName: "highlighter")
-                        }
-                    }
-
-                    annotationToolbarButton
-                }
-            }
-        }
-        .sheet(isPresented: $showUnifiedSelectionMenu) {
-            unifiedSelectionMenuView
-        }
-        .sheet(isPresented: $showInterlinearBottomSheet) {
-            interlinearBottomSheetView
-        }
-        .sheet(isPresented: $showSearch) {
-            searchView
-        }
-        .sheet(isPresented: $showMultiHighlightPalette) {
-            multiHighlightPaletteView
-        }
-        .sheet(isPresented: $showingColorPicker) {
-            ColorPicker("Select Color", selection: $selectedColor)
-                .padding()
-                .presentationDetents([.medium])
-        }
-        .sheet(isPresented: $showingNoteEditor) {
-            noteEditorView
-        }
-        .safeAreaInset(edge: .bottom) {
-            if selectedTool != .none {
-                AnnotationToolbar(
-                    selectedTool: $selectedTool,
-                    selectedColor: $selectedColor,
-                    penWidth: $penWidth,
-                    showingColorPicker: $showingColorPicker
-                )
-                .transition(.move(edge: .bottom))
+        Group {
+            if let vm = viewModel {
+                chapterContentView(vm)
+            } else {
+                ProgressView()
             }
         }
         .onAppear {
-            loadDrawing()
+            if viewModel == nil {
+                viewModel = ChapterViewModel(chapter: chapter, modelContext: modelContext)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func chapterContentView(_ vm: ChapterViewModel) -> some View {
+        @Bindable var viewModel = vm
+        
+        ZStack {
+            colorTheme.backgroundColor.ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Annotation toolbar (shown when annotations enabled)
+                if viewModel.showAnnotations {
+                    AnnotationToolbar(
+                        selectedTool: $viewModel.selectedTool,
+                        selectedColor: $viewModel.selectedColor,
+                        penWidth: $viewModel.penWidth,
+                        showingColorPicker: $viewModel.showingColorPicker
+                    )
+                    Divider()
+                }
+                
+                // Highlight palette (shown when text selected)
+                if viewModel.showHighlightMenu {
+                    HighlightPalette(
+                        selectedColor: $viewModel.selectedHighlightColor,
+                        onHighlight: viewModel.createHighlight,
+                        onDismiss: {
+                            viewModel.showHighlightMenu = false
+                            viewModel.selectedRange = nil
+                            viewModel.selectedText = ""
+                        }
+                    )
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    Divider()
+                }
+                
+                // Main chapter content with annotation overlay
+                chapterContent(vm)
+            }
+        }
+        .navigationTitle("\(viewModel.chapter.book?.name ?? "") \(viewModel.chapter.number)")
+        .searchable(text: $viewModel.searchText, prompt: "Search this chapter...")
+        .toolbar { toolbarContent(vm) }
+        .sheet(isPresented: $viewModel.showingDrawing) {
+            NavigationStack {
+                if let verse = viewModel.selectedVerse {
+                    FullPageDrawingView(verse: verse)
+                } else {
+                    FullPageDrawingView(chapter: viewModel.chapter)
+                }
+            }
+        }
+        .sheet(isPresented: $viewModel.showingColorPicker) {
+            ColorPickerSheet(selectedColor: $viewModel.selectedColor)
+        }
+        .sheet(item: $viewModel.verseToBookmark) { verse in
+            AddBookmarkSheet(verse: verse)
+        }
+        .onAppear {
+            // Load existing drawing
+            let chapterId = vm.chapter.id
+            if let chapterNote = try? modelContext.fetch(
+                FetchDescriptor<Note>(
+                    predicate: #Predicate { note in
+                        note.chapter?.id == chapterId && note.verse == nil
+                    }
+                )
+            ).first {
+                canvasView.drawing = chapterNote.drawing
+            }
         }
         .onDisappear {
-            saveDrawing()
+            // Save canvas drawing
+            saveAnnotations()
         }
     }
-
-    private var annotationToolbarButton: some View {
-        Button {
-            withAnimation {
-                if selectedTool == .none {
-                    selectedTool = .pen
-                } else {
-                    selectedTool = .none
-                    saveDrawing()
+    
+    // MARK: - Save Annotations
+    private func saveAnnotations() {
+        guard let vm = viewModel else { return }
+        let chapterId = vm.chapter.id
+        if let chapterNote = try? modelContext.fetch(
+            FetchDescriptor<Note>(
+                predicate: #Predicate { note in
+                    note.chapter?.id == chapterId && note.verse == nil
                 }
-            }
-        } label: {
-            Image(systemName: selectedTool == .none ? "pencil.tip.crop.circle" : "pencil.tip.crop.circle.fill")
-                .foregroundColor(selectedTool == .none ? .primary : .blue)
-        }
-    }
-
-    private var unifiedSelectionMenuView: some View {
-        Group {
-            if let verse = selectedVerse, let range = selectedRange {
-                let verseHighlights = allHighlights.filter { $0.verseId == verse.id }
-                UnifiedSelectionMenu(
-                    selectedText: selectedText,
-                    selectedWord: selectedWord,
-                    verse: verse,
-                    range: range,
-                    existingHighlights: verseHighlights,
-                    onHighlight: { color in
-                        createOrToggleHighlight(color: color)
-                    },
-                    onRemoveHighlight: { color in
-                        removeHighlight(color: color)
-                    },
-                    onCancel: {
-                        showUnifiedSelectionMenu = false
-                        clearSelection()
-                    }
-                )
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
-
-    private var interlinearBottomSheetView: some View {
-        Group {
-            if let word = selectedWord, let entry = lexiconEntry {
-                InterlinearBottomSheet(
-                    word: word,
-                    lexiconEntry: entry,
-                    onCopy: {
-                        copyWordToClipboard()
-                    },
-                    onAddNote: {
-                        openNoteEditorForWord()
-                    },
-                    onHighlight: {
-                        openHighlightMenuForWord()
-                    },
-                    onNavigateToVerse: { verseRef in
-                        navigateToVerse(verseRef)
-                    }
-                )
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
-
-    private var searchView: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                TextField("Search...", text: $searchText)
-                    .textFieldStyle(.roundedBorder)
-                    .padding(.horizontal)
-
-                Picker("Search Scope", selection: $searchScope) {
-                    Text("Current Book").tag(SearchScope.currentBook)
-                    Text("All Books").tag(SearchScope.all)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-
-                if !searchText.isEmpty {
-                    Text("Search feature coming soon")
-                        .foregroundColor(.secondary)
-                        .padding()
-                }
-
-                Spacer()
-            }
-            .padding(.top)
-            .navigationTitle("Search")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        showSearch = false
-                        searchText = ""
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
-
-    private func handleTextSelection(verse: Verse, range: NSRange, text: String) {
-        onVerseInteraction?()
-
-        selectedVerse = verse
-        selectedRange = range
-        selectedText = text
-
-        selectionDebounceTask?.cancel()
-
-        selectionDebounceTask = Task { @MainActor in
-            do {
-                try await Task.sleep(nanoseconds: 500_000_000)
-
-                if !Task.isCancelled {
-                    selectedWord = WordLookupService.findWord(in: verse, for: range)
-
-                    if let word = selectedWord {
-                        let lexiconService = LexiconService(modelContext: modelContext)
-                        lexiconEntry = lexiconService.getLexiconEntry(for: word)
-                        showInterlinearBottomSheet = true
-                    } else {
-                        showUnifiedSelectionMenu = true
-                    }
-                }
-            } catch {
-                // Task cancelled
-            }
-        }
-    }
-
-    private func clearSelection() {
-        selectedVerse = nil
-        selectedRange = nil
-        selectedText = ""
-        selectedWord = nil
-    }
-
-    private func createOrToggleHighlight(color: HighlightColor) {
-        guard let verse = selectedVerse, let range = selectedRange else { return }
-
-        let existingHighlight = allHighlights.first { highlight in
-            highlight.verseId == verse.id &&
-            highlight.startIndex == range.location &&
-            highlight.endIndex == range.location + range.length &&
-            colorsMatch(highlight.highlightColor, color.color)
-        }
-
-        if let existingHighlight = existingHighlight {
-            modelContext.delete(existingHighlight)
-        } else {
-            let highlight = Highlight(
-                verseId: verse.id,
-                startIndex: range.location,
-                endIndex: range.location + range.length,
-                color: color.color,
-                text: selectedText,
-                verse: verse
             )
-            modelContext.insert(highlight)
-        }
-
-        try? modelContext.save()
-        showUnifiedSelectionMenu = false
-        clearSelection()
-    }
-
-    private func removeHighlight(color: HighlightColor) {
-        guard let verse = selectedVerse, let range = selectedRange else { return }
-
-        let highlightToRemove = allHighlights.first { highlight in
-            highlight.verseId == verse.id &&
-            highlight.startIndex == range.location &&
-            highlight.endIndex == range.location + range.length &&
-            colorsMatch(highlight.highlightColor, color.color)
-        }
-
-        if let highlightToRemove = highlightToRemove {
-            modelContext.delete(highlightToRemove)
+        ).first {
+            chapterNote.drawing = canvasView.drawing
             try? modelContext.save()
         }
-
-        showUnifiedSelectionMenu = false
-        clearSelection()
     }
-
-    private func colorsMatch(_ c1: Color, _ c2: Color) -> Bool {
-        let uiColor1 = UIColor(c1)
-        let uiColor2 = UIColor(c2)
-        return uiColor1.cgColor.components?.dropLast() == uiColor2.cgColor.components?.dropLast()
-    }
-
-    private func loadDrawing() {
-        if let note = chapterNote, !note.drawing.strokes.isEmpty {
-            drawing = note.drawing
-            canvasView.drawing = drawing
-        }
-    }
-
-    private func saveDrawing() {
-        guard !drawing.bounds.isEmpty else { return }
-
-        if let note = chapterNote {
-            note.drawing = drawing
-        } else {
-            let note = Note(
-                title: "",
-                content: "",
-                drawing: drawing,
-                verseReference: "",
-                isMarginNote: false,
-                chapter: chapter,
-                verse: nil
-            )
-            modelContext.insert(note)
-        }
-
-        try? modelContext.save()
-    }
-
-    private var multiHighlightPaletteView: some View {
-        VStack(spacing: 20) {
-            Text("Highlight \(selectedVerses.count) Verse\(selectedVerses.count == 1 ? "" : "s")")
-                .font(.headline)
-
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 60))], spacing: 12) {
-                ForEach(HighlightColor.allCases, id: \.self) { color in
-                    Button {
-                        createMultiHighlight(color: color)
-                    } label: {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(color.color)
-                            .frame(height: 50)
-                            .overlay(
-                                Text(color.rawValue.capitalized)
-                                    .font(.caption)
-                                    .foregroundColor(.black.opacity(0.7))
+    
+    // MARK: - Chapter Content
+    @ViewBuilder
+    private func chapterContent(_ vm: ChapterViewModel) -> some View {
+        ZStack {
+            // Base layer: Scrollable verses
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(vm.filteredVerses) { verse in
+                            VerseRow(
+                                verse: verse,
+                                fontSize: fontSize,
+                                lineSpacing: lineSpacing,  // ← Passed from @AppStorage
+                                fontFamily: fontFamily,
+                                colorTheme: colorTheme,
+                                onTextSelected: { range, text in
+                                    vm.selectTextForHighlight(
+                                        verse: verse,
+                                        range: range,
+                                        text: text
+                                    )
+                                },
+                                onBookmark: {
+                                    vm.verseToBookmark = verse
+                                    vm.showingBookmarkSheet = true
+                                }
                             )
+                            .id(verse.id)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 20)
+                        }
+                        
+                        if let nextChapter = vm.nextChapter, vm.searchText.isEmpty {
+                            ChapterContinueButton(chapter: nextChapter) {
+                                onChapterChange(nextChapter)
+                            }
+                        }
+                    }
+                    .padding(.vertical)
+                    .onAppear {
+                        if let firstVerse = vm.filteredVerses.first {
+                            proxy.scrollTo(firstVerse.id, anchor: .top)
+                        }
                     }
                 }
+                // Disable scroll when annotating
+                .allowsHitTesting(vm.selectedTool == .none)
             }
-            .padding()
-
-            if selectedVersesHaveHighlights() {
-                Button(role: .destructive) {
-                    removeHighlightsFromSelectedVerses()
-                } label: {
-                    Label("Remove All Highlights", systemImage: "trash")
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.red.opacity(0.1))
-                        .cornerRadius(8)
-                }
-                .padding(.horizontal)
-            }
-
-            Button("Cancel") {
-                showMultiHighlightPalette = false
-            }
-            .padding()
-        }
-        .padding()
-        .presentationDetents([.medium])
-    }
-
-    private func selectedVersesHaveHighlights() -> Bool {
-        for verseId in selectedVerses {
-            if allHighlights.contains(where: { $0.verseId == verseId }) {
-                return true
-            }
-        }
-        return false
-    }
-
-    private func removeHighlightsFromSelectedVerses() {
-        for verseId in selectedVerses {
-            let highlights = allHighlights.filter { $0.verseId == verseId }
-            for highlight in highlights {
-                modelContext.delete(highlight)
-            }
-        }
-
-        try? modelContext.save()
-
-        showMultiHighlightPalette = false
-        isMultiSelectMode = false
-        selectedVerses.removeAll()
-    }
-
-    private func createMultiHighlight(color: HighlightColor) {
-        for verseId in selectedVerses {
-            if let verse = sortedVerses.first(where: { $0.id == verseId }) {
-                let existingHighlight = allHighlights.first { highlight in
-                    highlight.verseId == verse.id &&
-                    highlight.startIndex == 0 &&
-                    highlight.endIndex == verse.text.count &&
-                    colorsMatch(highlight.highlightColor, color.color)
-                }
-
-                if let existingHighlight = existingHighlight {
-                    modelContext.delete(existingHighlight)
-                } else {
-                    let highlight = Highlight(
-                        verseId: verse.id,
-                        startIndex: 0,
-                        endIndex: verse.text.count,
-                        color: color.color,
-                        text: verse.text,
-                        verse: verse
+            
+            // Annotation layer overlay
+            if vm.showAnnotations {
+                GeometryReader { geometry in
+                    FullPageAnnotationCanvas(
+                        note: getOrCreateChapterDrawing(),
+                        selectedTool: vm.selectedTool,
+                        selectedColor: vm.selectedColor,
+                        penWidth: vm.penWidth,
+                        canvasView: $canvasView
                     )
-                    modelContext.insert(highlight)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                 }
             }
         }
-
-        try? modelContext.save()
-
-        showMultiHighlightPalette = false
-        isMultiSelectMode = false
-        selectedVerses.removeAll()
     }
-
-    private var noteEditorView: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                TextField("Note Title", text: $noteTitle)
-                    .font(.headline)
-                    .textFieldStyle(.roundedBorder)
-                    .padding(.horizontal)
-
-                Picker("Note Type", selection: $isHandwrittenMode) {
-                    Label("Typed", systemImage: "keyboard").tag(false)
-                    Label("Handwritten", systemImage: "pencil.tip.crop.circle").tag(true)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-
-                if isHandwrittenMode {
-                    CanvasViewRepresentable(canvasView: $noteCanvasView, drawing: $noteDrawing)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                        )
-                        .padding(.horizontal)
-                } else {
-                    TextEditor(text: $noteContent)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                        )
-                        .padding(.horizontal)
-                }
-
-                Spacer()
+    
+    // MARK: - Get or Create Chapter Drawing
+    private func getOrCreateChapterDrawing() -> Note {
+        let chapterId = chapter.id
+        let descriptor = FetchDescriptor<Note>(
+            predicate: #Predicate { note in
+                note.chapter?.id == chapterId && note.verse == nil
             }
-            .padding(.top)
-            .navigationTitle("New Note")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        clearNoteEditor()
-                    }
-                }
-
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
-                        saveNote()
-                    }
-                    .disabled(noteTitle.isEmpty && noteContent.isEmpty && noteDrawing.bounds.isEmpty)
-                }
-            }
+        )
+        
+        if let existing = try? modelContext.fetch(descriptor).first {
+            return existing
         }
-        .presentationDetents([.large])
-    }
-
-    private func clearNoteEditor() {
-        showingNoteEditor = false
-        noteTitle = ""
-        noteContent = ""
-        noteDrawing = PKDrawing()
-        noteCanvasView.drawing = PKDrawing()
-        isHandwrittenMode = false
-    }
-
-    private func saveNote() {
-        let note = Note(
-            title: noteTitle.isEmpty ? "Untitled Note" : noteTitle,
-            content: isHandwrittenMode ? "" : noteContent,
-            drawing: isHandwrittenMode ? noteDrawing : PKDrawing(),
+        
+        let newNote = Note(
+            title: "Annotations - \(chapter.reference)",
+            content: "",
+            drawing: PKDrawing(),
             verseReference: chapter.reference,
             isMarginNote: false,
             chapter: chapter,
             verse: nil
         )
-        modelContext.insert(note)
-        try? modelContext.save()
-
-        clearNoteEditor()
+        modelContext.insert(newNote)
+        return newNote
     }
-
-    private func copyWordToClipboard() {
-        guard let word = selectedWord else { return }
-        let copyText = """
-        \(word.originalText) (\(word.transliteration))
-        \(word.gloss)
-        """
-        UIPasteboard.general.string = copyText
-    }
-
-    private func openNoteEditorForWord() {
-        guard let word = selectedWord else { return }
-        noteTitle = "\(word.originalText) (\(word.transliteration))"
-        noteContent = "Word: \(word.originalText)\nMeaning: \(word.gloss)\n\n"
-        showInterlinearBottomSheet = false
-        showingNoteEditor = true
-    }
-
-    private func openHighlightMenuForWord() {
-        showInterlinearBottomSheet = false
-        showUnifiedSelectionMenu = true
-    }
-
-    private func navigateToVerse(_ verseRef: VerseReference) {
-        let bookName = verseRef.fullBookName
-        let chapterNumber = verseRef.chapter
-
-        let bookDescriptor = FetchDescriptor<Book>(
-            predicate: #Predicate { book in
-                book.name == bookName
+    
+    // MARK: - Toolbar
+    @ToolbarContentBuilder
+    private func toolbarContent(_ viewModel: ChapterViewModel) -> some ToolbarContent {
+        // NEW: Annotation toggle button (prominent placement)
+        ToolbarItem(placement: .navigationBarTrailing) {
+            Button {
+                withAnimation {
+                    viewModel.showAnnotations.toggle()
+                    if viewModel.showAnnotations {
+                        viewModel.selectedTool = .pen  // Auto-select pen
+                    } else {
+                        viewModel.selectedTool = .none
+                        saveAnnotations()
+                    }
+                }
+            } label: {
+                Image(systemName: viewModel.showAnnotations ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                    .foregroundColor(viewModel.showAnnotations ? .blue : .primary)
             }
-        )
+        }
+        
+        // Navigation and menu
+        ToolbarItem(placement: .navigationBarTrailing) {
+            HStack(spacing: 8) {
+                // Previous chapter
+                if let previous = viewModel.previousChapter {
+                    Button {
+                        onChapterChange(previous)
+                    } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                }
+                
+                // Menu with additional options
+                Menu {
+                    Button {
+                        viewModel.selectedVerse = nil
+                        viewModel.showingDrawing = true
+                    } label: {
+                        Label("Full Page Note", systemImage: "note.text.badge.plus")
+                    }
+                    
+                    Button(action: viewModel.bookmarkChapter) {
+                        Label("Bookmark Chapter", systemImage: "bookmark.fill")
+                    }
+                    
+                    Divider()
+                    
+                    // Annotation toggle also in menu (for discoverability)
+                    Button {
+                        withAnimation {
+                            viewModel.showAnnotations.toggle()
+                        }
+                    } label: {
+                        Label(
+                            viewModel.showAnnotations ? "Hide Annotations" : "Show Annotations",
+                            systemImage: viewModel.showAnnotations ? "pencil.slash" : "pencil"
+                        )
+                    }
+                    
+                    if viewModel.showAnnotations {
+                        Button {
+                            // Clear the canvas drawing
+                            viewModel.clearAnnotations(drawing: &canvasView.drawing)
 
-        do {
-            let books = try modelContext.fetch(bookDescriptor)
-            guard let book = books.first else {
-                print("Book not found: \(bookName)")
-                return
+                            // Also clear the saved note
+                            if let chapterNote = try? modelContext.fetch(
+                                FetchDescriptor<Note>(
+                                    predicate: #Predicate { note in
+                                        note.chapter?.id == viewModel.chapter.id && note.verse == nil
+                                    }
+                                )
+                            ).first {
+                                chapterNote.drawing = PKDrawing()
+                                try? modelContext.save()
+                            }
+                        } label: {
+                            Label("Clear Annotations", systemImage: "trash")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                
+                // Next chapter
+                if let next = viewModel.nextChapter {
+                    Button {
+                        onChapterChange(next)
+                    } label: {
+                        Image(systemName: "chevron.right")
+                    }
+                }
             }
-
-            guard let targetChapter = book.chapters.first(where: { $0.number == chapterNumber }) else {
-                print("Chapter not found: \(chapterNumber)")
-                return
-            }
-
-            showInterlinearBottomSheet = false
-            onChapterChange(targetChapter)
-        } catch {
-            print("Error fetching book: \(error)")
         }
     }
 }
 
-// MARK: - Canvas View Representable for Note Editor
-struct CanvasViewRepresentable: UIViewRepresentable {
-    @Binding var canvasView: PKCanvasView
-    @Binding var drawing: PKDrawing
-
-    func makeUIView(context: Context) -> PKCanvasView {
-        canvasView.drawing = drawing
-        canvasView.drawingPolicy = .anyInput
-        canvasView.backgroundColor = .clear
-        canvasView.isOpaque = false
-        canvasView.delegate = context.coordinator
-        return canvasView
+// MARK: - Verse Row Component
+struct VerseRow: View {
+    let verse: Verse
+    let fontSize: Double
+    let lineSpacing: Double  // ← This gets passed from ChapterView's @AppStorage
+    let fontFamily: FontFamily
+    let colorTheme: ColorTheme
+    let onTextSelected: (NSRange, String) -> Void
+    let onBookmark: () -> Void
+    
+    @Query private var allHighlights: [Highlight]
+    @State private var selectedText = ""
+    @State private var selectedRange: NSRange?
+    @State private var showHighlightMenu = false
+    
+    var verseHighlights: [Highlight] {
+        allHighlights.filter { $0.verseId == verse.id }
     }
-
-    func updateUIView(_ uiView: PKCanvasView, context: Context) {
-        uiView.drawing = drawing
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    class Coordinator: NSObject, PKCanvasViewDelegate {
-        var parent: CanvasViewRepresentable
-
-        init(_ parent: CanvasViewRepresentable) {
-            self.parent = parent
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            // Verse number
+            VStack(spacing: 4) {
+                Text("\(verse.number)")
+                    .font(.system(size: fontSize * 0.75, design: .rounded))
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32, height: 32)
+                    .background(Color.accentColor.opacity(0.1))
+                    .clipShape(Circle())
+                
+                if !verseHighlights.isEmpty {
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .frame(width: 40)
+            
+            // Verse text with proper line spacing
+            SelectableTextView(
+                text: verse.text,
+                highlights: verseHighlights,
+                fontSize: fontSize,
+                fontFamily: fontFamily,
+                lineSpacing: lineSpacing,  // ← Line spacing applied here
+                selectedRange: $selectedRange,
+                onHighlight: { range, text in
+                    onTextSelected(range, text)
+                }
+            )
+            .foregroundColor(colorTheme.textColor)
         }
-
-        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
-            parent.drawing = canvasView.drawing
+        .contextMenu {
+            Button(action: onBookmark) {
+                Label("Bookmark", systemImage: "bookmark")
+            }
+            
+            Button {
+                UIPasteboard.general.string = verse.text
+            } label: {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
         }
     }
 }
+
+// MARK: - Next Chapter Button
+struct ChapterContinueButton: View {
+    let chapter: Chapter
+    let onTap: () -> Void
+    
+    var body: some View {
+        VStack {
+            Divider()
+            Button(action: onTap) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Continue Reading")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("\(chapter.book?.name ?? "") \(chapter.number)")
+                            .font(.headline)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(12)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+        }
+    }
+}
+
+// MARK: - Preview
+#Preview {
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(
+        for: Book.self,
+        Chapter.self,
+        Verse.self,
+        configurations: config
+    )
+    
+    let context = container.mainContext
+    let book = Book(name: "Genesis", order: 1, testament: "Old")
+    let chapter = Chapter(number: 1, book: book)
+    let verse = Verse(number: 1, text: "In the beginning God created the heaven and the earth.", chapter: chapter)
+    
+    context.insert(book)
+    context.insert(chapter)
+    context.insert(verse)
+    
+    NavigationStack {
+        ChapterView(chapter: chapter) { _ in }
+    }
+    .modelContainer(container)
+}
+

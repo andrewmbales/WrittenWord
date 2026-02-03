@@ -19,7 +19,7 @@ struct SimpleChapterTextView: View {
     let onTextSelected: (Verse, NSRange, String) -> Void
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: lineSpacing) {
             ForEach(verses) { verse in
                 SimpleVerseView(
                     verse: verse,
