@@ -31,7 +31,7 @@ struct SettingsView: View {
                     HStack {
                         Text("Line Spacing")
                         Spacer()
-                        Text("\(Int(lineSpacing))")
+                        Text(String(format: "%.0f", lineSpacing))  // Better formatting
                             .foregroundStyle(.secondary)
                     }
                     Slider(value: $lineSpacing, in: 2...36, step: 2)

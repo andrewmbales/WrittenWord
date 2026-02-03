@@ -1,5 +1,5 @@
 //
-//  ChapterViewModel.swift
+//  ChapterViewModel_Optimized.swift
 //  WrittenWord
 //
 //  PERFORMANCE IMPROVEMENTS:
@@ -10,14 +10,13 @@
 
 import Foundation
 import SwiftUI
-import Observation
 import SwiftData
 import PencilKit
 
 @MainActor
 @Observable
-class ChapterViewModel {
-    @ObservationIgnored private let modelContext: ModelContext
+class ChapterViewModel_Optimized {
+    private let modelContext: ModelContext
     let chapter: Chapter
     
     // State
@@ -27,7 +26,7 @@ class ChapterViewModel {
     var selectedTool: AnnotationTool = .none
     var selectedColor: Color = .black
     var penWidth: CGFloat = 1.0
-    @ObservationIgnored var canvasView = PKCanvasView()
+    var canvasView = PKCanvasView()
     var showingColorPicker = false
     
     // Highlighting
@@ -56,17 +55,17 @@ class ChapterViewModel {
             }
         }
     }
-    @ObservationIgnored private var searchDebounceTask: Task<Void, Never>?
+    private var searchDebounceTask: Task<Void, Never>?
     
     // Bookmarks
     var showingBookmarkSheet = false
     var verseToBookmark: Verse?
     
     // OPTIMIZED: Lazy-loaded, cached properties
-    @ObservationIgnored private var _sortedVerses: [Verse]?
-    @ObservationIgnored private var _filteredVerses: [Verse]?
-    @ObservationIgnored private var _previousChapter: Chapter?
-    @ObservationIgnored private var _nextChapter: Chapter?
+    private var _sortedVerses: [Verse]?
+    private var _filteredVerses: [Verse]?
+    private var _previousChapter: Chapter?
+    private var _nextChapter: Chapter?
     
     var sortedVerses: [Verse] {
         if let cached = _sortedVerses { return cached }
@@ -201,4 +200,3 @@ class ChapterViewModel {
         _filteredVerses = nil
     }
 }
-
