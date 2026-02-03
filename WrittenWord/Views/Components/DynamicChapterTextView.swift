@@ -33,7 +33,13 @@ struct DynamicChapterTextView: UIViewRepresentable {
         textView.textContainer.lineBreakMode = .byWordWrapping
         textView.textContainer.maximumNumberOfLines = 0
         textView.textContainer.widthTracksTextView = true  // ← KEY FIX
-        
+
+        // Set proper content priorities for wrapping
+        textView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        textView.setContentHuggingPriority(.required, for: .vertical)
+        textView.setContentCompressionResistancePriority(.required, for: .vertical)
+        textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
         textView.isSelectable = true
         textView.isUserInteractionEnabled = true
 

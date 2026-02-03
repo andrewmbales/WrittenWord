@@ -40,11 +40,13 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
         
         // Customize selection appearance
         textView.tintColor = UIColor.systemBlue
-        
-        // CRITICAL: Set content hugging and compression resistance
-        textView.setContentHuggingPriority(.defaultLow, for: .vertical)
+
+        // CRITICAL: Set content hugging and compression resistance for proper wrapping
+        textView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        textView.setContentHuggingPriority(.required, for: .vertical)
         textView.setContentCompressionResistancePriority(.required, for: .vertical)
-        
+        textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
         return textView
     }
     
@@ -59,11 +61,12 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
         // Force proper layout - CRITICAL
         textView.textContainer.lineBreakMode = .byWordWrapping
         textView.textContainer.maximumNumberOfLines = 0
-        
+
         // Ensure proper sizing
-        textView.sizeToFit()
+        textView.invalidateIntrinsicContentSize()
         textView.setNeedsLayout()
         textView.layoutIfNeeded()
+        textView.sizeToFit()
     }
     
     func makeCoordinator() -> Coordinator {
