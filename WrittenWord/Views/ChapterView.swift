@@ -12,14 +12,15 @@ import PencilKit
 struct ChapterView: View {
     let chapter: Chapter
     @State private var viewModel: ChapterViewModel?
+    @State private var canvasView = PKCanvasView()
     @Environment(\.modelContext) private var modelContext
-    
+
     // Settings - now properly reactive to changes
     @AppStorage("fontSize") private var fontSize: Double = 16.0
     @AppStorage("lineSpacing") private var lineSpacing: Double = 6.0
     @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
     @AppStorage("fontFamily") private var fontFamily: FontFamily = .system
-    
+
     let onChapterChange: (Chapter) -> Void
     
     // MARK: - Initialization
@@ -102,7 +103,7 @@ struct ChapterView: View {
         }
         .onAppear {
             // Load existing drawing
-            let chapterId = viewModel.chapter.id
+            let chapterId = vm.chapter.id
             if let chapterNote = try? modelContext.fetch(
                 FetchDescriptor<Note>(
                     predicate: #Predicate { note in
@@ -110,18 +111,19 @@ struct ChapterView: View {
                     }
                 )
             ).first {
-                viewModel.canvasView.drawing = chapterNote.drawing
+                canvasView.drawing = chapterNote.drawing
             }
         }
         .onDisappear {
             // Save canvas drawing
-            saveAnnotations(viewModel: vm)
+            saveAnnotations()
         }
     }
     
     // MARK: - Save Annotations
-    private func saveAnnotations(viewModel: ChapterViewModel) {
-        let chapterId = viewModel.chapter.id
+    private func saveAnnotations() {
+        guard let vm = viewModel else { return }
+        let chapterId = vm.chapter.id
         if let chapterNote = try? modelContext.fetch(
             FetchDescriptor<Note>(
                 predicate: #Predicate { note in
@@ -129,7 +131,7 @@ struct ChapterView: View {
                 }
             )
         ).first {
-            chapterNote.drawing = viewModel.canvasView.drawing
+            chapterNote.drawing = canvasView.drawing
             try? modelContext.save()
         }
     }
@@ -191,10 +193,7 @@ struct ChapterView: View {
                         selectedTool: vm.selectedTool,
                         selectedColor: vm.selectedColor,
                         penWidth: vm.penWidth,
-                        canvasView: Binding(
-                            get: { viewModel?.canvasView ?? PKCanvasView() },
-                            set: { viewModel?.canvasView = $0 }
-                        )
+                        canvasView: $canvasView
                     )
                     .frame(width: geometry.size.width, height: geometry.size.height)
                 }
@@ -240,7 +239,7 @@ struct ChapterView: View {
                         viewModel.selectedTool = .pen  // Auto-select pen
                     } else {
                         viewModel.selectedTool = .none
-                        saveAnnotations(viewModel: viewModel)
+                        saveAnnotations()
                     }
                 }
             } label: {
@@ -290,16 +289,20 @@ struct ChapterView: View {
                     
                     if viewModel.showAnnotations {
                         Button {
-                            viewModel.clearAnnotations(
-                                canvasView: viewModel.canvasView,
-                                chapterNote: try? modelContext.fetch(
-                                    FetchDescriptor<Note>(
-                                        predicate: #Predicate { note in
-                                            note.chapter?.id == viewModel.chapter.id && note.verse == nil
-                                        }
-                                    )
-                                ).first
-                            )
+                            // Clear the canvas drawing
+                            viewModel.clearAnnotations(drawing: &canvasView.drawing)
+
+                            // Also clear the saved note
+                            if let chapterNote = try? modelContext.fetch(
+                                FetchDescriptor<Note>(
+                                    predicate: #Predicate { note in
+                                        note.chapter?.id == viewModel.chapter.id && note.verse == nil
+                                    }
+                                )
+                            ).first {
+                                chapterNote.drawing = PKDrawing()
+                                try? modelContext.save()
+                            }
                         } label: {
                             Label("Clear Annotations", systemImage: "trash")
                         }
