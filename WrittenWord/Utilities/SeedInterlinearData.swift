@@ -6,187 +6,228 @@
 //  Includes: John 1:1-14, Genesis 1:1-5, Psalm 23:1-3
 //
 
+
+
+
 import Foundation
 import SwiftData
+
+// MARK: - Seed Expanded Interlinear Data
 
 @MainActor
 func seedExpandedInterlinearData(modelContext: ModelContext) async throws {
     print("📖 Seeding expanded interlinear data...")
     
-    // Seed John 1:1-14 (already have 1-5, adding 6-14)
-    try await seedJohn1(modelContext: modelContext)
+    // Seed John 1:1-5 (Greek)
+    try await seedJohn1Interlinear(modelContext: modelContext)
     
-    // Seed Genesis 1:1-5
-    try await seedGenesis1(modelContext: modelContext)
+    // Seed Genesis 1:1-5 (Hebrew)
+    try await seedGenesis1Interlinear(modelContext: modelContext)
     
-    // Seed Psalm 23:1-3
-    try await seedPsalm23(modelContext: modelContext)
+    // Seed Psalm 23:1-3 (Hebrew)
+    try await seedPsalm23Interlinear(modelContext: modelContext)
     
     print("✅ Expanded interlinear data seeded!")
 }
 
-// MARK: - John 1 (verses 1-14)
+// MARK: - John 1 Interlinear
 
 @MainActor
-private func seedJohn1(modelContext: ModelContext) async throws {
-    // Find John
-    let bookFetch = FetchDescriptor<Book>(
+private func seedJohn1Interlinear(modelContext: ModelContext) async throws {
+    let johnFetch = FetchDescriptor<Book>(
         predicate: #Predicate<Book> { book in book.name == "John" }
     )
-    guard let john = try modelContext.fetch(bookFetch).first,
+    guard let john = try modelContext.fetch(johnFetch).first,
           let chapter1 = john.chapters.first(where: { $0.number == 1 }) else {
         print("⚠️ John 1 not found")
         return
     }
     
-    // John 1:6-10 (sample - adding key words)
-    
-    if let verse6 = chapter1.verses.first(where: { $0.number == 6 }) {
-        // "There was a man sent from God, whose name was John."
+    // Verse 1: "In the beginning was the Word, and the Word was with God, and the Word was God."
+    if let verse1 = chapter1.verses.first(where: { $0.number == 1 }) {
         let words: [(String, String, String, String, String, Int, Int, Int, String)] = [
-            ("ἄνθρωπος", "anthrōpos", "G444", "man, human", "Noun - Nominative Masculine Singular", 0, 11, 14, "man"),
-            ("ἀποστέλλω", "apostellō", "G649", "to send, send away", "Verb - Perfect Passive Participle", 1, 15, 19, "sent"),
-            ("θεός", "theos", "G2316", "God", "Noun - Genitive Masculine Singular", 2, 25, 28, "God"),
-            ("ὄνομα", "onoma", "G3686", "name", "Noun - Nominative Neuter Singular", 3, 36, 40, "name"),
-            ("Ἰωάννης", "Iōannēs", "G2491", "John", "Noun - Nominative Masculine Singular", 4, 45, 49, "John"),
+            ("ἀρχῇ", "archē", "G746", "beginning, origin", "Noun - Dative Feminine Singular", 0, 7, 16, "beginning"),
+            ("ἦν", "ēn", "G1510", "was, to be", "Verb - Imperfect Active Indicative - 3rd Person Singular", 1, 17, 20, "was"),
+            ("λόγος", "logos", "G3056", "word, speech, divine utterance", "Noun - Nominative Masculine Singular", 2, 25, 29, "Word"),
+            ("καί", "kai", "G2532", "and, even, also", "Conjunction", 3, 35, 38, "and"),
+            ("ἦν", "ēn", "G1510", "was, to be", "Verb - Imperfect Active Indicative - 3rd Person Singular", 4, 43, 47, "was"),
+            ("πρός", "pros", "G4314", "toward, with, at", "Preposition", 5, 53, 57, "with"),
+            ("θεόν", "theon", "G2316", "God, deity", "Noun - Accusative Masculine Singular", 6, 62, 65, "God"),
+            ("θεός", "theos", "G2316", "God, deity", "Noun - Nominative Masculine Singular", 7, 80, 84, "God"),
         ]
-        addWordsToVerse(verse6, words: words, modelContext: modelContext)
+        addWordsToVerse(verse1, words: words, modelContext: modelContext)
     }
     
-    if let verse7 = chapter1.verses.first(where: { $0.number == 7 }) {
-        // "The same came for a witness, to bear witness of the Light..."
+    // Verse 2: "The same was in the beginning with God."
+    if let verse2 = chapter1.verses.first(where: { $0.number == 2 }) {
         let words: [(String, String, String, String, String, Int, Int, Int, String)] = [
-            ("μαρτυρία", "martyria", "G3141", "testimony, witness", "Noun - Accusative Feminine Singular", 0, 19, 26, "witness"),
-            ("μαρτυρέω", "martyreō", "G3140", "to testify, bear witness", "Verb - Aorist Active Subjunctive", 1, 31, 43, "bear witness"),
-            ("φῶς", "phōs", "G5457", "light", "Noun - Genitive Neuter Singular", 2, 51, 56, "Light"),
+            ("οὗτος", "houtos", "G3778", "this, he", "Demonstrative Pronoun - Nominative Masculine Singular", 0, 0, 4, "same"),
+            ("ἦν", "ēn", "G1510", "was, to be", "Verb - Imperfect Active Indicative - 3rd Person Singular", 1, 9, 12, "was"),
+            ("ἀρχῇ", "archē", "G746", "beginning, origin", "Noun - Dative Feminine Singular", 2, 20, 29, "beginning"),
+            ("πρός", "pros", "G4314", "toward, with, at", "Preposition", 3, 35, 39, "with"),
+            ("θεόν", "theon", "G2316", "God, deity", "Noun - Accusative Masculine Singular", 4, 40, 43, "God"),
         ]
-        addWordsToVerse(verse7, words: words, modelContext: modelContext)
+        addWordsToVerse(verse2, words: words, modelContext: modelContext)
     }
     
-    if let verse9 = chapter1.verses.first(where: { $0.number == 9 }) {
-        // "That was the true Light, which lighteth every man..."
+    // Verse 3: "All things were made by him; and without him was not any thing made that was made."
+    if let verse3 = chapter1.verses.first(where: { $0.number == 3 }) {
         let words: [(String, String, String, String, String, Int, Int, Int, String)] = [
-            ("ἀληθινός", "alēthinos", "G228", "true, genuine", "Adjective - Nominative Neuter Singular", 0, 13, 17, "true"),
-            ("φῶς", "phōs", "G5457", "light", "Noun - Nominative Neuter Singular", 1, 18, 23, "Light"),
-            ("φωτίζω", "phōtizō", "G5461", "to give light, illuminate", "Verb - Present Active Indicative", 2, 31, 39, "lighteth"),
-            ("ἄνθρωπος", "anthrōpos", "G444", "man, human", "Noun - Accusative Masculine Singular", 3, 46, 49, "man"),
+            ("πάντα", "panta", "G3956", "all, every", "Adjective - Nominative Neuter Plural", 0, 0, 3, "All"),
+            ("ἐγένετο", "egeneto", "G1096", "to become, happen", "Verb - Aorist Middle Deponent Indicative - 3rd Person Singular", 1, 11, 15, "made"),
+            ("αὐτοῦ", "autou", "G846", "him, his, self", "Personal Pronoun - Genitive Masculine 3rd Person Singular", 2, 28, 31, "him"),
         ]
-        addWordsToVerse(verse9, words: words, modelContext: modelContext)
+        addWordsToVerse(verse3, words: words, modelContext: modelContext)
     }
     
-    if let verse14 = chapter1.verses.first(where: { $0.number == 14 }) {
-        // "And the Word was made flesh, and dwelt among us..."
+    // Verse 4: "In him was life; and the life was the light of men."
+    if let verse4 = chapter1.verses.first(where: { $0.number == 4 }) {
         let words: [(String, String, String, String, String, Int, Int, Int, String)] = [
-            ("λόγος", "logos", "G3056", "word, speech", "Noun - Nominative Masculine Singular", 0, 8, 12, "Word"),
-            ("σάρξ", "sarx", "G4561", "flesh", "Noun - Nominative Feminine Singular", 1, 22, 27, "flesh"),
-            ("σκηνόω", "skēnoō", "G4637", "to dwell, tabernacle", "Verb - Aorist Active Indicative", 2, 33, 38, "dwelt"),
-            ("δόξα", "doxa", "G1391", "glory", "Noun - Accusative Feminine Singular", 3, 62, 67, "glory"),
-            ("μονογενής", "monogenēs", "G3439", "only begotten, unique", "Adjective - Genitive Masculine Singular", 4, 80, 89, "only begotten"),
-            ("πατήρ", "patēr", "G3962", "father", "Noun - Genitive Masculine Singular", 5, 101, 107, "Father"),
+            ("αὐτῷ", "autō", "G846", "him, his, self", "Personal Pronoun - Dative Masculine 3rd Person Singular", 0, 3, 6, "him"),
+            ("ζωή", "zōē", "G2222", "life", "Noun - Nominative Feminine Singular", 1, 11, 15, "life"),
+            ("φῶς", "phōs", "G5457", "light", "Noun - Nominative Neuter Singular", 2, 38, 43, "light"),
+            ("ἀνθρώπων", "anthrōpōn", "G444", "men, mankind", "Noun - Genitive Masculine Plural", 3, 47, 50, "men"),
         ]
-        addWordsToVerse(verse14, words: words, modelContext: modelContext)
+        addWordsToVerse(verse4, words: words, modelContext: modelContext)
+    }
+    
+    // Verse 5: "And the light shineth in darkness; and the darkness comprehended it not."
+    if let verse5 = chapter1.verses.first(where: { $0.number == 5 }) {
+        let words: [(String, String, String, String, String, Int, Int, Int, String)] = [
+            ("φῶς", "phōs", "G5457", "light", "Noun - Nominative Neuter Singular", 0, 8, 13, "light"),
+            ("φαίνει", "phainei", "G5316", "to shine, appear", "Verb - Present Active Indicative - 3rd Person Singular", 1, 14, 21, "shineth"),
+            ("σκοτίᾳ", "skotia", "G4653", "darkness", "Noun - Dative Feminine Singular", 2, 25, 33, "darkness"),
+            ("κατέλαβεν", "katelaben", "G2638", "to seize, comprehend", "Verb - Aorist Active Indicative - 3rd Person Singular", 3, 52, 64, "comprehended"),
+        ]
+        addWordsToVerse(verse5, words: words, modelContext: modelContext)
     }
     
     print("   ✅ John 1 interlinear data added")
 }
 
-// MARK: - Genesis 1 (verses 1-5)
+// MARK: - Genesis 1 Interlinear
 
 @MainActor
-private func seedGenesis1(modelContext: ModelContext) async throws {
-    // Find Genesis
-    let bookFetch = FetchDescriptor<Book>(
+private func seedGenesis1Interlinear(modelContext: ModelContext) async throws {
+    let genesisFetch = FetchDescriptor<Book>(
         predicate: #Predicate<Book> { book in book.name == "Genesis" }
     )
-    guard let genesis = try modelContext.fetch(bookFetch).first,
+    guard let genesis = try modelContext.fetch(genesisFetch).first,
           let chapter1 = genesis.chapters.first(where: { $0.number == 1 }) else {
         print("⚠️ Genesis 1 not found")
         return
     }
     
+    // Verse 1: "In the beginning God created the heaven and the earth."
     if let verse1 = chapter1.verses.first(where: { $0.number == 1 }) {
-        // "In the beginning God created the heaven and the earth."
         let words: [(String, String, String, String, String, Int, Int, Int, String)] = [
-            ("בְּרֵאשִׁית", "bərēʾšîṯ", "H7225", "beginning", "Noun - feminine singular", 0, 7, 16, "beginning"),
-            ("בָּרָא", "bārāʾ", "H1254", "to create", "Verb - Qal - Perfect - 3ms", 1, 17, 20, "created"),
+            ("בְּרֵאשִׁית", "bərēʾšîṯ", "H7225", "beginning", "Noun - feminine singular construct", 0, 7, 16, "beginning"),
+            ("בָּרָא", "bārāʾ", "H1254", "to create", "Verb - Qal - Perfect - 3rd masculine singular", 1, 17, 20, "created"),
             ("אֱלֹהִים", "ʾĕlōhîm", "H430", "God", "Noun - masculine plural", 2, 21, 24, "God"),
-            ("שָׁמַיִם", "šāmayim", "H8064", "heaven, sky", "Noun - masculine plural", 3, 36, 42, "heaven"),
-            ("אֶרֶץ", "ʾereṣ", "H776", "earth, land", "Noun - feminine singular", 4, 51, 56, "earth"),
+            ("שָׁמַיִם", "šāmayim", "H8064", "heaven, sky", "Noun - masculine dual", 3, 29, 35, "heaven"),
+            ("אֶרֶץ", "ʾereṣ", "H776", "earth, land", "Noun - feminine singular", 4, 44, 49, "earth"),
         ]
         addWordsToVerse(verse1, words: words, modelContext: modelContext)
     }
     
+    // Verse 2: "And the earth was without form, and void..."
     if let verse2 = chapter1.verses.first(where: { $0.number == 2 }) {
-        // Key words from verse 2
         let words: [(String, String, String, String, String, Int, Int, Int, String)] = [
-            ("תֹהוּ", "ṯōhû", "H8414", "formless, confusion", "Noun - masculine singular", 0, 18, 25, "without form"),
-            ("בֹהוּ", "ḇōhû", "H922", "empty", "Noun - masculine singular", 1, 30, 34, "void"),
-            ("חֹשֶׁךְ", "ḥōšeḵ", "H2822", "darkness", "Noun - masculine singular", 2, 40, 48, "darkness"),
-            ("רוּחַ", "rûaḥ", "H7307", "spirit, wind", "Noun - feminine singular", 3, 77, 83, "Spirit"),
-            ("מַיִם", "mayim", "H4325", "water", "Noun - masculine plural", 4, 106, 112, "waters"),
+            ("אֶרֶץ", "ʾereṣ", "H776", "earth, land", "Noun - feminine singular", 0, 8, 13, "earth"),
+            ("תֹהוּ", "ṯōhû", "H8414", "formlessness, confusion, unreality", "Noun - masculine singular", 1, 18, 25, "form"),
+            ("בֹהוּ", "ḇōhû", "H922", "emptiness", "Noun - masculine singular", 2, 31, 35, "void"),
+            ("חֹשֶׁךְ", "ḥōšeḵ", "H2822", "darkness", "Noun - masculine singular", 3, 41, 49, "darkness"),
+            ("רוּחַ", "rûaḥ", "H7307", "spirit, wind, breath", "Noun - common singular construct", 4, 74, 80, "Spirit"),
+            ("אֱלֹהִים", "ʾĕlōhîm", "H430", "God", "Noun - masculine plural", 5, 84, 87, "God"),
+            ("מַיִם", "mayim", "H4325", "water", "Noun - masculine plural", 6, 106, 112, "waters"),
         ]
         addWordsToVerse(verse2, words: words, modelContext: modelContext)
     }
     
+    // Verse 3: "And God said, Let there be light: and there was light."
     if let verse3 = chapter1.verses.first(where: { $0.number == 3 }) {
-        // "And God said, Let there be light: and there was light."
         let words: [(String, String, String, String, String, Int, Int, Int, String)] = [
-            ("אָמַר", "ʾāmar", "H559", "to say", "Verb - Qal - Imperfect - 3ms", 0, 8, 12, "said"),
-            ("אוֹר", "ʾôr", "H216", "light", "Noun - masculine singular", 1, 30, 35, "light"),
+            ("אֱלֹהִים", "ʾĕlōhîm", "H430", "God", "Noun - masculine plural", 0, 4, 7, "God"),
+            ("אָמַר", "ʾāmar", "H559", "to say, speak", "Verb - Qal - Imperfect - 3rd masculine singular", 1, 8, 12, "said"),
+            ("אוֹר", "ʾôr", "H216", "light", "Noun - masculine singular", 2, 27, 32, "light"),
         ]
         addWordsToVerse(verse3, words: words, modelContext: modelContext)
     }
     
-    print("   ✅ Genesis 1 interlinear data added")
+    // Verse 4: "And God saw the light, that it was good..."
+    if let verse4 = chapter1.verses.first(where: { $0.number == 4 }) {
+        let words: [(String, String, String, String, String, Int, Int, Int, String)] = [
+            ("רָאָה", "rāʾâ", "H7200", "to see, perceive", "Verb - Qal - Imperfect - 3rd masculine singular", 0, 8, 11, "saw"),
+            ("אוֹר", "ʾôr", "H216", "light", "Noun - masculine singular", 1, 16, 21, "light"),
+            ("טוֹב", "ṭôḇ", "G2896", "good, pleasant", "Adjective - masculine singular", 2, 33, 37, "good"),
+            ("חֹשֶׁךְ", "ḥōšeḵ", "H2822", "darkness", "Noun - masculine singular", 3, 61, 69, "darkness"),
+        ]
+        addWordsToVerse(verse4, words: words, modelContext: modelContext)
+    }
+    
+    // Verse 5: "And God called the light Day..."
+    if let verse5 = chapter1.verses.first(where: { $0.number == 5 }) {
+        let words: [(String, String, String, String, String, Int, Int, Int, String)] = [
+            ("קָרָא", "qārāʾ", "H7121", "to call, proclaim", "Verb - Qal - Imperfect - 3rd masculine singular", 0, 8, 14, "called"),
+            ("אוֹר", "ʾôr", "H216", "light", "Noun - masculine singular", 1, 19, 24, "light"),
+            ("יוֹם", "yôm", "H3117", "day", "Noun - masculine singular", 2, 25, 28, "Day"),
+            ("חֹשֶׁךְ", "ḥōšeḵ", "H2822", "darkness", "Noun - masculine singular", 3, 38, 46, "darkness"),
+            ("לַיְלָה", "laylâ", "H3915", "night", "Noun - masculine singular", 4, 54, 59, "Night"),
+        ]
+        addWordsToVerse(verse5, words: words, modelContext: modelContext)
+    }
+    
+    print("✅ Genesis 1 interlinear data added")
 }
 
-// MARK: - Psalm 23 (verses 1-3)
+// MARK: - Psalm 23 Interlinear
 
 @MainActor
-private func seedPsalm23(modelContext: ModelContext) async throws {
-    // Find Psalms
-    let bookFetch = FetchDescriptor<Book>(
+private func seedPsalm23Interlinear(modelContext: ModelContext) async throws {
+    let psalmsFetch = FetchDescriptor<Book>(
         predicate: #Predicate<Book> { book in book.name == "Psalms" }
     )
-    guard let psalms = try modelContext.fetch(bookFetch).first,
+    guard let psalms = try modelContext.fetch(psalmsFetch).first,
           let chapter23 = psalms.chapters.first(where: { $0.number == 23 }) else {
         print("⚠️ Psalm 23 not found")
         return
     }
     
+    // Verse 1: "The LORD is my shepherd; I shall not want."
     if let verse1 = chapter23.verses.first(where: { $0.number == 1 }) {
-        // "The LORD is my shepherd; I shall not want."
         let words: [(String, String, String, String, String, Int, Int, Int, String)] = [
-            ("יְהוָה", "YHWH", "H3068", "LORD, Yahweh", "Noun - proper name", 0, 4, 8, "LORD"),
-            ("רָעָה", "rāʿâ", "H7462", "to shepherd, pasture", "Verb - Qal - Participle", 1, 12, 14, "shepherd"),
-            ("חָסֵר", "ḥāsēr", "H2637", "to lack, need", "Verb - Qal - Imperfect - 1cs", 2, 33, 37, "want"),
+            ("יְהוָה", "YHWH", "H3068", "LORD, Yahweh", "Proper Noun", 0, 4, 8, "LORD"),
+            ("רָעָה", "rāʿâ", "H7462", "to pasture, tend, graze", "Verb - Qal - Participle - masculine singular", 1, 12, 14, "shepherd"),
+            ("חָסֵר", "ḥāsēr", "H2637", "to lack, need, decrease", "Verb - Qal - Imperfect - 1st common singular", 2, 28, 32, "want"),
         ]
         addWordsToVerse(verse1, words: words, modelContext: modelContext)
     }
     
+    // Verse 2: "He maketh me to lie down in green pastures..."
     if let verse2 = chapter23.verses.first(where: { $0.number == 2 }) {
-        // Key words
         let words: [(String, String, String, String, String, Int, Int, Int, String)] = [
-            ("רָבַץ", "rāḇaṣ", "H7257", "to lie down", "Verb - Hiphil - Imperfect", 0, 8, 16, "lie down"),
-            ("דֶּשֶׁא", "dešeʾ", "H1877", "grass, tender grass", "Noun - masculine singular", 1, 20, 25, "green"),
-            ("מַיִם", "mayim", "H4325", "water", "Noun - masculine plural", 2, 43, 49, "waters"),
-            ("מְנוּחָה", "mənûḥâ", "H4496", "rest, resting place", "Noun - feminine singular", 3, 50, 61, "still"),
+            ("רָבַץ", "rāḇaṣ", "H7257", "to lie down, rest", "Verb - Hiphil - Imperfect - 3rd masculine singular", 0, 14, 17, "lie"),
+            ("דֶּשֶׁא", "dešeʾ", "H1877", "grass, new grass", "Noun - masculine singular construct", 1, 24, 29, "green"),
+            ("נָאוֶה", "nāweh", "H5116", "pasture, habitation", "Noun - masculine singular", 2, 30, 38, "pastures"),
+            ("מַיִם", "mayim", "H4325", "water", "Noun - masculine plural construct", 3, 54, 61, "waters"),
+            ("מְנוּחָה", "mənûḥôṯ", "H4496", "resting place, quietness", "Noun - feminine plural", 4, 62, 67, "still"),
         ]
         addWordsToVerse(verse2, words: words, modelContext: modelContext)
     }
     
+    // Verse 3: "He restoreth my soul..."
     if let verse3 = chapter23.verses.first(where: { $0.number == 3 }) {
-        // Key words
         let words: [(String, String, String, String, String, Int, Int, Int, String)] = [
-            ("שׁוּב", "šûḇ", "H7725", "to return, restore", "Verb - Polel - Imperfect", 0, 3, 11, "restoreth"),
-            ("נֶפֶשׁ", "nefeš", "H5315", "soul, life", "Noun - feminine singular", 1, 15, 19, "soul"),
-            ("צֶדֶק", "ṣeḏeq", "H6664", "righteousness", "Noun - masculine singular", 2, 48, 61, "righteousness"),
-            ("שֵׁם", "šēm", "H8034", "name", "Noun - masculine singular", 3, 75, 79, "name"),
+            ("נֶפֶשׁ", "nefeš", "H5315", "soul, life, person", "Noun - feminine singular", 0, 14, 18, "soul"),
+            ("שׁוּב", "šûḇ", "H7725", "to turn back, return", "Verb - Polel - Imperfect - 3rd masculine singular", 1, 3, 12, "restoreth"),
+            ("נָחָה", "nāḥâ", "H5148", "to lead, guide", "Verb - Piel - Imperfect - 3rd masculine singular", 2, 23, 29, "leadeth"),
+            ("צֶדֶק", "ṣeḏeq", "H6664", "righteousness, justice", "Noun - masculine singular", 3, 45, 58, "righteousness"),
+            ("שֵׁם", "šēm", "H8034", "name", "Noun - masculine singular construct", 4, 72, 76, "name"),
         ]
         addWordsToVerse(verse3, words: words, modelContext: modelContext)
     }
     
-    print("   ✅ Psalm 23 interlinear data added")
+    print("✅ Psalm 23 interlinear data added")
 }
 
 // MARK: - Helper Function
@@ -248,3 +289,5 @@ private func addWordsToVerse(_ verse: Verse, words: [(String, String, String, St
  - Import script to process the data
  - ~1GB of interlinear word data
  */
+
+

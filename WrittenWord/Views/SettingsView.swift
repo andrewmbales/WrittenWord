@@ -19,12 +19,18 @@ struct SettingsView: View {
             Section("Reading") {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("Font Size")
+                        Text("Line Spacing")
                         Spacer()
-                        Text("\(Int(fontSize))")
+                        Text(String(format: "%.0f", lineSpacing))
                             .foregroundStyle(.secondary)
                     }
-                    Slider(value: $fontSize, in: 12...24, step: 1)
+                    Slider(value: $lineSpacing, in: 2...36, step: 2)
+                        .onChange(of: lineSpacing) { oldValue, newValue in
+                            print("⚙️ SettingsView: Line spacing changed")
+                            print("   Old value: \(oldValue)")
+                            print("   New value: \(newValue)")
+                            print("   @AppStorage updated to: \(lineSpacing)")
+                        }
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {

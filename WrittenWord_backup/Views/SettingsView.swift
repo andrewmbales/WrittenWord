@@ -2,8 +2,9 @@
 //  SettingsView.swift
 //  WrittenWord
 //
-//  Enhanced with Phase 1 improvements
+//  Updated to use shared UITypes
 //
+
 import SwiftUI
 
 struct SettingsView: View {
@@ -18,22 +19,28 @@ struct SettingsView: View {
             Section("Reading") {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("Font Size")
+                        Text("Line Spacing")
                         Spacer()
-                        Text("\(Int(fontSize))")
+                        Text(String(format: "%.0f", lineSpacing))
                             .foregroundStyle(.secondary)
                     }
-                    Slider(value: $fontSize, in: 12...24, step: 1)
+                    Slider(value: $lineSpacing, in: 2...36, step: 2)
+                        .onChange(of: lineSpacing) { oldValue, newValue in
+                            print("⚙️ SettingsView: Line spacing changed")
+                            print("   Old value: \(oldValue)")
+                            print("   New value: \(newValue)")
+                            print("   @AppStorage updated to: \(lineSpacing)")
+                        }
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Line Spacing")
                         Spacer()
-                        Text("\(Int(lineSpacing))")
+                        Text(String(format: "%.0f", lineSpacing))  // Better formatting
                             .foregroundStyle(.secondary)
                     }
-                    Slider(value: $lineSpacing, in: 2...12, step: 2)
+                    Slider(value: $lineSpacing, in: 2...36, step: 2)
                 }
                 
                 Picker("Font Family", selection: $fontFamily) {
@@ -96,64 +103,6 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
-    }
-}
-
-enum ColorTheme: String, CaseIterable {
-    case system = "System"
-    case light = "Light"
-    case dark = "Dark"
-    case sepia = "Sepia"
-    case sand = "Sand"
-    
-    var displayName: String { rawValue }
-    
-    var icon: String {
-        switch self {
-        case .system: return "sparkles"
-        case .light: return "sun.max.fill"
-        case .dark: return "moon.fill"
-        case .sepia: return "book.fill"
-        case .sand: return "beach.umbrella.fill"
-        }
-    }
-    
-    var backgroundColor: Color {
-        switch self {
-        case .system: return Color(.systemBackground)
-        case .light: return Color.white
-        case .dark: return Color.black
-        case .sepia: return Color(red: 0.95, green: 0.91, blue: 0.82)
-        case .sand: return Color(red: 0.98, green: 0.95, blue: 0.88)
-        }
-    }
-    
-    var textColor: Color {
-        switch self {
-        case .system: return Color(.label)
-        case .light: return Color.black
-        case .dark: return Color.white
-        case .sepia: return Color(red: 0.2, green: 0.15, blue: 0.1)
-        case .sand: return Color(red: 0.3, green: 0.25, blue: 0.2)
-        }
-    }
-}
-
-enum FontFamily: String, CaseIterable {
-    case system = "System"
-    case serif = "Serif"
-    case rounded = "Rounded"
-    case monospaced = "Monospaced"
-    
-    var displayName: String { rawValue }
-    
-    func font(size: CGFloat) -> Font {
-        switch self {
-        case .system: return .system(size: size)
-        case .serif: return .custom("Georgia", size: size)
-        case .rounded: return .system(size: size, design: .rounded)
-        case .monospaced: return .system(size: size, design: .monospaced)
-        }
     }
 }
 

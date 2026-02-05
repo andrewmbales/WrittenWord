@@ -13,8 +13,13 @@ final class Verse: Identifiable {
     var number: Int
     var text: String
     var version: String
+    @Relationship(inverse: \Chapter.verses)
     var chapter: Chapter?
     var notes: [Note] = []
+
+    /// Interlinear words (original language mappings)
+    @Relationship(deleteRule: .cascade)
+    var words: [Word] = []
     
     init(number: Int, 
          text: String, 

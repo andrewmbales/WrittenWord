@@ -2,202 +2,232 @@
 //  SidebarView.swift
 //  WrittenWord
 //
-//  Enhanced with Phase 2 - Added Search, Bookmarks, and Stats
+//  ENHANCED: Search opens in detail view, not sheet
 //
+
 import SwiftUI
 import SwiftData
 
 struct SidebarView: View {
     @Query(sort: \Book.order) private var books: [Book]
-    @Binding var selectedBook: Book?
-    @State private var selectedView: SidebarViewType? = .bible
-    @State private var expandedTestament: String? = "OT"
+    @Binding var selectedChapter: Chapter?
+    @Binding var showingSearch: Bool
+    var onNavigationAction: (() -> Void)? = nil
+
+    @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
+    @Environment(\.colorScheme) private var systemColorScheme
+
+    @State private var selectedBook: Book?
+    @State private var showingSettings = false
+    @State private var showingNotebook = false
+    @State private var showingHighlights = false
+    @State private var showingBookmarks = false
+    @State private var showingStats = false
+
+    private var buttonColor: Color {
+        switch colorTheme {
+        case .light, .sepia, .sand:
+            return .black
+        case .dark:
+            return .white
+        case .system:
+            return systemColorScheme == .dark ? .white : .black
+        }
+    }
     
     var oldTestamentBooks: [Book] {
-        books.filter { $0.testament == "OT" }.sorted { $0.order < $1.order }
+        books.filter { $0.testament == "OT" }
     }
     
     var newTestamentBooks: [Book] {
-        books.filter { $0.testament == "NT" }.sorted { $0.order < $1.order }
+        books.filter { $0.testament == "NT" }
     }
     
     var body: some View {
-        List(selection: $selectedView) {
+        List {
+            // Settings
             Section {
-                NavigationLink(value: SidebarViewType.bible) {
-                    Label {
-                        Text("Bible")
-                            .font(.headline)
-                    } icon: {
-                        Image(systemName: "book.closed.fill")
-                            .foregroundStyle(.blue)
-                    }
+                Button {
+                    onNavigationAction?()
+                    showingSettings = true
+                } label: {
+                    Label("Settings", systemImage: "gear")
+                        .foregroundStyle(buttonColor)
                 }
-                
-                // Phase 2: Global Search
-                NavigationLink(destination: GlobalSearchView()) {
-                    Label {
-                        Text("Search")
-                            .font(.headline)
-                    } icon: {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundStyle(.green)
-                    }
+                .buttonStyle(.plain)
+            }
+
+            // Books of the Bible
+            Section("BOOKS OF THE BIBLE") {
+                if let selectedBook = selectedBook {
+                    chapterGridView(for: selectedBook)
+                } else {
+                    twoColumnBookLayout
                 }
             }
-            
+
+            // Study tools
             Section("My Study") {
-                NavigationLink(value: SidebarViewType.notebook) {
-                    Label {
-                        Text("Notebook")
-                            .font(.headline)
-                    } icon: {
-                        Image(systemName: "note.text")
-                            .foregroundStyle(.orange)
-                    }
+                Button {
+                    onNavigationAction?()
+                    showingHighlights = true
+                } label: {
+                    Label("Highlights", systemImage: "highlighter")
+                        .foregroundStyle(buttonColor)
                 }
-                
-                // Phase 1: Highlights
-                NavigationLink(destination: HighlightsView()) {
-                    Label {
-                        Text("Highlights")
-                            .font(.headline)
-                    } icon: {
-                        Image(systemName: "highlighter")
-                            .foregroundStyle(.yellow)
-                    }
+                .buttonStyle(.plain)
+
+                Button {
+                    onNavigationAction?()
+                    showingNotebook = true
+                } label: {
+                    Label("Notes", systemImage: "note.text")
+                        .foregroundStyle(buttonColor)
                 }
-                
-                // Phase 2: Bookmarks
-                NavigationLink(destination: BookmarksView()) {
-                    Label {
-                        Text("Bookmarks")
-                            .font(.headline)
-                    } icon: {
-                        Image(systemName: "bookmark.fill")
-                            .foregroundStyle(.red)
-                    }
+                .buttonStyle(.plain)
+
+                Button {
+                    onNavigationAction?()
+                    selectedChapter = nil
+                    showingSearch = true
+                } label: {
+                    Label("Search", systemImage: "magnifyingglass")
+                        .foregroundStyle(buttonColor)
                 }
-            }
-            
-            Section("Insights") {
-                // Phase 2: Highlight Statistics
-                NavigationLink(destination: HighlightStatsView()) {
-                    Label {
-                        Text("Statistics")
-                            .font(.headline)
-                    } icon: {
-                        Image(systemName: "chart.bar.fill")
-                            .foregroundStyle(.purple)
-                    }
+                .buttonStyle(.plain)
+
+                Button {
+                    onNavigationAction?()
+                    showingBookmarks = true
+                } label: {
+                    Label("Bookmarks", systemImage: "bookmark.fill")
+                        .foregroundStyle(buttonColor)
                 }
-            }
-            
-            if selectedView == .bible {
-                Section {
-                    DisclosureGroup(
-                        isExpanded: Binding(
-                            get: { expandedTestament == "OT" },
-                            set: { expandedTestament = $0 ? "OT" : nil }
-                        )
-                    ) {
-                        ForEach(oldTestamentBooks) { book in
-                            NavigationLink(value: SidebarViewType.book(book)) {
-                                HStack {
-                                    Text(book.name)
-                                    Spacer()
-                                    Text("\(book.chapters.count)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 2)
-                                        .background(Color.secondary.opacity(0.1))
-                                        .clipShape(Capsule())
-                                }
-                            }
-                        }
-                    } label: {
-                        Label {
-                            Text("Old Testament")
-                                .font(.subheadline.bold())
-                        } icon: {
-                            Image(systemName: "book")
-                                .foregroundStyle(.purple)
-                        }
-                    }
-                    
-                    DisclosureGroup(
-                        isExpanded: Binding(
-                            get: { expandedTestament == "NT" },
-                            set: { expandedTestament = $0 ? "NT" : nil }
-                        )
-                    ) {
-                        ForEach(newTestamentBooks) { book in
-                            NavigationLink(value: SidebarViewType.book(book)) {
-                                HStack {
-                                    Text(book.name)
-                                    Spacer()
-                                    Text("\(book.chapters.count)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 2)
-                                        .background(Color.secondary.opacity(0.1))
-                                        .clipShape(Capsule())
-                                }
-                            }
-                        }
-                    } label: {
-                        Label {
-                            Text("New Testament")
-                                .font(.subheadline.bold())
-                        } icon: {
-                            Image(systemName: "book")
-                                .foregroundStyle(.indigo)
-                        }
-                    }
+                .buttonStyle(.plain)
+
+                Button {
+                    onNavigationAction?()
+                    showingStats = true
+                } label: {
+                    Label("Statistics", systemImage: "chart.bar.fill")
+                        .foregroundStyle(buttonColor)
                 }
-            }
-            
-            Section {
-                NavigationLink(destination: SettingsView()) {
-                    Label {
-                        Text("Settings")
-                    } icon: {
-                        Image(systemName: "gear")
-                            .foregroundStyle(.gray)
-                    }
-                }
+                .buttonStyle(.plain)
             }
         }
         .listStyle(.sidebar)
         .navigationTitle("Written Word")
-        .onChange(of: selectedView) { oldValue, newValue in
-            if case .book(let book) = newValue {
-                selectedBook = book
+        // Sheets for views that need them
+        .sheet(isPresented: $showingSettings) {
+            NavigationStack {
+                SettingsView()
+            }
+        }
+        .sheet(isPresented: $showingNotebook) {
+            NavigationStack {
+                NotebookView_Optimized()
+            }
+        }
+        .sheet(isPresented: $showingHighlights) {
+            NavigationStack {
+                HighlightsView()
+            }
+        }
+        .sheet(isPresented: $showingBookmarks) {
+            NavigationStack {
+                BookmarksView()
+            }
+        }
+        .sheet(isPresented: $showingStats) {
+            NavigationStack {
+                HighlightStatsView()
             }
         }
     }
-}
-
-#Preview {
-    let container = try! ModelContainer(
-        for: Book.self,
-        Chapter.self,
-        Note.self,
-        Highlight.self,
-        Bookmark.self,
-        configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-    )
     
-    let genesis = Book(name: "Genesis", order: 1, testament: "OT")
-    genesis.chapters = [Chapter(number: 1), Chapter(number: 2)]
-    container.mainContext.insert(genesis)
+    // MARK: - Two Column Book Layout
+    private var twoColumnBookLayout: some View {
+        HStack(alignment: .top, spacing: 20) {
+            // Old Testament Column
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(oldTestamentBooks) { book in
+                    Button {
+                        selectedBook = book
+                    } label: {
+                        Text(book.name)
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            
+            // New Testament Column
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(newTestamentBooks) { book in
+                    Button {
+                        selectedBook = book
+                    } label: {
+                        Text(book.name)
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 8)
+    }
     
-    let matthew = Book(name: "Matthew", order: 40, testament: "NT")
-    matthew.chapters = [Chapter(number: 1)]
-    container.mainContext.insert(matthew)
-    
-    return SidebarView(selectedBook: .constant(nil))
-        .modelContainer(container)
+    // MARK: - Chapter Grid View
+    private func chapterGridView(for book: Book) -> some View {
+        let columns = [
+            GridItem(.adaptive(minimum: 40, maximum: 50), spacing: 8)
+        ]
+        
+        return VStack(alignment: .leading, spacing: 12) {
+            // Back button
+            HStack {
+                Button {
+                    selectedBook = nil
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.caption)
+                        Text("Books")
+                            .font(.subheadline)
+                    }
+                }
+                .buttonStyle(.plain)
+                
+                Spacer()
+            }
+            
+            Text(book.name)
+                .font(.title2.bold())
+            
+            // Chapter numbers grid
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+                ForEach(book.chapters.sorted(by: { $0.number < $1.number })) { chapter in
+                    Button {
+                        selectedChapter = chapter
+                    } label: {
+                        Text("\(chapter.number)")
+                            .font(.subheadline)
+                            .fontWeight(selectedChapter?.id == chapter.id ? .bold : .regular)
+                            .foregroundColor(selectedChapter?.id == chapter.id ? .white : .primary)
+                            .frame(width: 40, height: 32)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(selectedChapter?.id == chapter.id ? Color.accentColor : Color.secondary.opacity(0.1))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.vertical, 8)
+    }
 }

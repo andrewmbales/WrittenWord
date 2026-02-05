@@ -2,8 +2,9 @@
 //  HighlightsView.swift
 //  WrittenWord
 //
-//  Phase 1: Dedicated view for all highlights
+//  UPDATED: Direct navigation to chapters using NavigationLink(value:)
 //
+
 import SwiftUI
 import SwiftData
 
@@ -34,7 +35,6 @@ struct HighlightsView: View {
     var filteredHighlights: [Highlight] {
         var result = highlights
         
-        // Filter by search
         if !searchText.isEmpty {
             result = result.filter { highlight in
                 highlight.text.localizedCaseInsensitiveContains(searchText) ||
@@ -42,7 +42,6 @@ struct HighlightsView: View {
             }
         }
         
-        // Filter by color
         if let selectedColor = selectedColor {
             result = result.filter { highlight in
                 highlight.highlightColor.toHex() == selectedColor.color.toHex()
@@ -64,24 +63,22 @@ struct HighlightsView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            mainContent
-                .navigationTitle("Highlights")
-                .searchable(text: $searchText, prompt: "Search highlights...")
-                .toolbar {
-                    toolbarContent
-                }
-                .alert("Delete Highlight", isPresented: $showingDeleteConfirmation) {
-                    Button("Cancel", role: .cancel) { }
-                    Button("Delete", role: .destructive) {
-                        if let highlight = highlightToDelete {
-                            deleteHighlight(highlight)
-                        }
+        mainContent
+            .navigationTitle("Highlights")
+            .searchable(text: $searchText, prompt: "Search highlights...")
+            .toolbar {
+                toolbarContent
+            }
+            .alert("Delete Highlight", isPresented: $showingDeleteConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    if let highlight = highlightToDelete {
+                        deleteHighlight(highlight)
                     }
-                } message: {
-                    Text("Are you sure you want to delete this highlight?")
                 }
-        }
+            } message: {
+                Text("Are you sure you want to delete this highlight?")
+            }
     }
     
     @ViewBuilder
@@ -118,29 +115,21 @@ struct HighlightsView: View {
             ForEach(groupedHighlights, id: \.0) { section, sectionHighlights in
                 Section(header: Text(section)) {
                     ForEach(sectionHighlights) { highlight in
-                        HighlightRow(highlight: highlight)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    highlightToDelete = highlight
-                                    showingDeleteConfirmation = true
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
+                        // CRITICAL: Direct navigation to chapter
+                        if let chapter = highlight.verse?.chapter {
+                            NavigationLink(value: chapter) {
+                                HighlightRow(highlight: highlight)
                             }
-                            .contextMenu {
-                                Button {
-                                    UIPasteboard.general.string = highlight.text
-                                } label: {
-                                    Label("Copy", systemImage: "doc.on.doc")
-                                }
-                                
-                                Button(role: .destructive) {
-                                    highlightToDelete = highlight
-                                    showingDeleteConfirmation = true
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
+                        } else {
+                            HighlightRow(highlight: highlight)
+                        }
+                    }
+                    .onDelete { offsets in
+                        // Handle delete
+                        for index in offsets {
+                            highlightToDelete = sectionHighlights[index]
+                            showingDeleteConfirmation = true
+                        }
                     }
                 }
             }
@@ -200,9 +189,8 @@ struct HighlightsView: View {
     
     private func groupByColor(_ highlights: [Highlight]) -> [(String, [Highlight])] {
         let grouped = Dictionary(grouping: highlights) { highlight -> String in
-            // Match highlight color to HighlightColor enum
-            if let matchingColor = HighlightColor.allCases.first(where: { 
-                $0.color.toHex() == highlight.highlightColor.toHex() 
+            if let matchingColor = HighlightColor.allCases.first(where: {
+                $0.color.toHex() == highlight.highlightColor.toHex()
             }) {
                 return matchingColor.rawValue
             }
@@ -297,32 +285,4 @@ struct HighlightRow: View {
         }
         .padding(.vertical, 4)
     }
-}
-
-#Preview {
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(
-        for: Highlight.self,
-        Verse.self,
-        Chapter.self,
-        Book.self,
-        configurations: config
-    )
-    
-    let context = container.mainContext
-    let book = Book(name: "Genesis", order: 1, testament: "OT")
-    let chapter = Chapter(number: 1, book: book)
-    let verse = Verse(number: 1, text: "In the beginning God created the heaven and the earth.", chapter: chapter)
-    
-    let highlight1 = Highlight(verseId: verse.id, startIndex: 17, endIndex: 20, color: .yellow, text: "God", verse: verse)
-    let highlight2 = Highlight(verseId: verse.id, startIndex: 29, endIndex: 35, color: .green, text: "heaven", verse: verse)
-    
-    context.insert(book)
-    context.insert(chapter)
-    context.insert(verse)
-    context.insert(highlight1)
-    context.insert(highlight2)
-    
-    return HighlightsView()
-        .modelContainer(container)
 }

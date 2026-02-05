@@ -2,8 +2,9 @@
 //  BookmarksView.swift
 //  WrittenWord
 //
-//  Phase 2: Bookmarks Management
+//  UPDATED: Direct navigation to chapters using NavigationLink(value:)
 //
+
 import SwiftUI
 import SwiftData
 
@@ -37,7 +38,6 @@ struct BookmarksView: View {
     var filteredBookmarks: [Bookmark] {
         var results = bookmarks
         
-        // Filter by search
         if !searchText.isEmpty {
             results = results.filter { bookmark in
                 bookmark.displayTitle.localizedCaseInsensitiveContains(searchText) ||
@@ -46,7 +46,6 @@ struct BookmarksView: View {
             }
         }
         
-        // Filter by category
         if let category = selectedCategory {
             results = results.filter { $0.category == category.rawValue }
         }
@@ -68,24 +67,22 @@ struct BookmarksView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            mainContent
-                .navigationTitle("Bookmarks")
-                .searchable(text: $searchText, prompt: "Search bookmarks...")
-                .toolbar {
-                    toolbarContent
-                }
-                .alert("Delete Bookmark", isPresented: $showingDeleteConfirmation) {
-                    Button("Cancel", role: .cancel) { }
-                    Button("Delete", role: .destructive) {
-                        if let bookmark = bookmarkToDelete {
-                            deleteBookmark(bookmark)
-                        }
+        mainContent
+            .navigationTitle("Bookmarks")
+            .searchable(text: $searchText, prompt: "Search bookmarks...")
+            .toolbar {
+                toolbarContent
+            }
+            .alert("Delete Bookmark", isPresented: $showingDeleteConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    if let bookmark = bookmarkToDelete {
+                        deleteBookmark(bookmark)
                     }
-                } message: {
-                    Text("Are you sure you want to delete this bookmark?")
                 }
-        }
+            } message: {
+                Text("Are you sure you want to delete this bookmark?")
+            }
     }
     
     @ViewBuilder
@@ -127,45 +124,33 @@ struct BookmarksView: View {
             ForEach(groupedBookmarks, id: \.0) { section, sectionBookmarks in
                 Section(header: Text(section)) {
                     ForEach(sectionBookmarks) { bookmark in
-                        BookmarkRow(bookmark: bookmark)
-                            .swipeActions(edge: .leading) {
-                                Button {
-                                    togglePin(bookmark)
-                                } label: {
-                                    Label(bookmark.isPinned ? "Unpin" : "Pin", 
-                                          systemImage: bookmark.isPinned ? "pin.slash" : "pin")
-                                }
-                                .tint(.orange)
+                        // CRITICAL: Direct navigation to chapter
+                        if let chapter = bookmark.chapter ?? bookmark.verse?.chapter {
+                            NavigationLink(value: chapter) {
+                                BookmarkRow(bookmark: bookmark)
                             }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    bookmarkToDelete = bookmark
-                                    showingDeleteConfirmation = true
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
+                        } else {
+                            BookmarkRow(bookmark: bookmark)
+                        }
+                    }
+                    .swipeActions(edge: .leading) {
+                        Button {
+                            // Toggle pin
+                            for bookmark in sectionBookmarks {
+                                bookmark.isPinned.toggle()
                             }
-                            .contextMenu {
-                                Button {
-                                    togglePin(bookmark)
-                                } label: {
-                                    Label(bookmark.isPinned ? "Unpin" : "Pin", 
-                                          systemImage: bookmark.isPinned ? "pin.slash.fill" : "pin.fill")
-                                }
-                                
-                                Button {
-                                    // Edit bookmark
-                                } label: {
-                                    Label("Edit", systemImage: "pencil")
-                                }
-                                
-                                Button(role: .destructive) {
-                                    bookmarkToDelete = bookmark
-                                    showingDeleteConfirmation = true
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
+                            try? modelContext.save()
+                        } label: {
+                            Label("Pin", systemImage: "pin")
+                        }
+                        .tint(.orange)
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            // Delete handled per item
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
                     }
                 }
             }
@@ -222,13 +207,6 @@ struct BookmarksView: View {
         }
     }
     
-    private func togglePin(_ bookmark: Bookmark) {
-        withAnimation {
-            bookmark.isPinned.toggle()
-            try? modelContext.save()
-        }
-    }
-    
     private func deleteBookmark(_ bookmark: Bookmark) {
         withAnimation {
             modelContext.delete(bookmark)
@@ -236,14 +214,11 @@ struct BookmarksView: View {
         }
     }
     
-    // MARK: - Grouping Functions
-    
+    // MARK: - Grouping Functions (same as before)
     private func groupByCategory(_ bookmarks: [Bookmark]) -> [(String, [Bookmark])] {
         let grouped = Dictionary(grouping: bookmarks) { $0.category }
-        
+        let categories = BookmarkCategory.allCases.map { $0.rawValue }
         return grouped.sorted { first, second in
-            // Sort by predefined category order
-            let categories = BookmarkCategory.allCases.map { $0.rawValue }
             let firstIndex = categories.firstIndex(of: first.key) ?? Int.max
             let secondIndex = categories.firstIndex(of: second.key) ?? Int.max
             return firstIndex < secondIndex
@@ -253,19 +228,13 @@ struct BookmarksView: View {
     private func groupByDate(_ bookmarks: [Bookmark]) -> [(String, [Bookmark])] {
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: bookmarks) { bookmark -> String in
-            if calendar.isDateInToday(bookmark.createdAt) {
-                return "Today"
-            } else if calendar.isDateInYesterday(bookmark.createdAt) {
-                return "Yesterday"
-            } else if calendar.isDate(bookmark.createdAt, equalTo: Date(), toGranularity: .weekOfYear) {
-                return "This Week"
-            } else if calendar.isDate(bookmark.createdAt, equalTo: Date(), toGranularity: .month) {
-                return "This Month"
-            } else {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "MMMM yyyy"
-                return formatter.string(from: bookmark.createdAt)
-            }
+            if calendar.isDateInToday(bookmark.createdAt) { return "Today" }
+            if calendar.isDateInYesterday(bookmark.createdAt) { return "Yesterday" }
+            if calendar.isDate(bookmark.createdAt, equalTo: Date(), toGranularity: .weekOfYear) { return "This Week" }
+            if calendar.isDate(bookmark.createdAt, equalTo: Date(), toGranularity: .month) { return "This Month" }
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMMM yyyy"
+            return formatter.string(from: bookmark.createdAt)
         }
         
         let order = ["Today", "Yesterday", "This Week", "This Month"]
@@ -273,13 +242,9 @@ struct BookmarksView: View {
             if let firstIndex = order.firstIndex(of: first.key),
                let secondIndex = order.firstIndex(of: second.key) {
                 return firstIndex < secondIndex
-            } else if order.contains(first.key) {
-                return true
-            } else if order.contains(second.key) {
-                return false
-            } else {
-                return first.key > second.key
-            }
+            } else if order.contains(first.key) { return true }
+            else if order.contains(second.key) { return false }
+            else { return first.key > second.key }
         }
     }
     
@@ -290,7 +255,6 @@ struct BookmarksView: View {
             }
             return "Other"
         }
-        
         return grouped.sorted { $0.key < $1.key }
     }
     
@@ -299,91 +263,66 @@ struct BookmarksView: View {
         let unpinned = bookmarks.filter { !$0.isPinned }
         
         var result: [(String, [Bookmark])] = []
-        
-        if !pinned.isEmpty {
-            result.append(("Pinned", pinned))
-        }
-        if !unpinned.isEmpty {
-            result.append(("All Bookmarks", unpinned))
-        }
-        
+        if !pinned.isEmpty { result.append(("Pinned", pinned)) }
+        if !unpinned.isEmpty { result.append(("All Bookmarks", unpinned)) }
         return result
     }
 }
 
-// MARK: - Bookmark Row
 struct BookmarkRow: View {
     @Bindable var bookmark: Bookmark
     
     var body: some View {
-        NavigationLink(destination: destinationView) {
-            HStack(alignment: .top, spacing: 12) {
-                // Category color indicator
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(bookmark.categoryColor)
-                    .frame(width: 4)
-                
-                VStack(alignment: .leading, spacing: 6) {
-                    // Title and pin indicator
-                    HStack {
-                        Text(bookmark.displayTitle)
-                            .font(.headline)
-                            .lineLimit(2)
-                        
-                        if bookmark.isPinned {
-                            Image(systemName: "pin.fill")
-                                .font(.caption2)
-                                .foregroundStyle(.orange)
-                        }
-                        
-                        Spacer()
-                    }
+        HStack(alignment: .top, spacing: 12) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(bookmark.categoryColor)
+                .frame(width: 4)
+            
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(bookmark.displayTitle)
+                        .font(.headline)
+                        .lineLimit(2)
                     
-                    // Reference
-                    Text(bookmark.reference)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    
-                    // Notes preview
-                    if !bookmark.notes.isEmpty {
-                        Text(bookmark.notes)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .padding(.top, 2)
-                    }
-                    
-                    // Category and date
-                    HStack(spacing: 12) {
-                        Label(bookmark.category, systemImage: categoryIcon)
+                    if bookmark.isPinned {
+                        Image(systemName: "pin.fill")
                             .font(.caption2)
-                            .foregroundStyle(bookmark.categoryColor)
-                        
-                        Spacer()
-                        
-                        HStack(spacing: 4) {
-                            Image(systemName: "clock")
-                            Text(bookmark.createdAt.formatted(date: .abbreviated, time: .omitted))
-                        }
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                            .foregroundStyle(.gray)
                     }
-                    .padding(.top, 4)
+                    
+                    Spacer()
                 }
+                
+                Text(bookmark.reference)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                
+                if !bookmark.notes.isEmpty {
+                    Text(bookmark.notes)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .padding(.top, 2)
+                }
+                
+                HStack(spacing: 12) {
+                    Label(bookmark.category, systemImage: categoryIcon)
+                        .font(.caption2)
+                        .foregroundStyle(bookmark.categoryColor)
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                        Text(bookmark.createdAt.formatted(date: .abbreviated, time: .omitted))
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                }
+                .padding(.top, 4)
             }
-            .padding(.vertical, 4)
         }
-    }
-    
-    @ViewBuilder
-    private var destinationView: some View {
-        if let chapter = bookmark.chapter {
-            ChapterView(chapter: chapter, onChapterChange: { _ in })
-        } else if let verse = bookmark.verse, let chapter = verse.chapter {
-            ChapterView(chapter: chapter, onChapterChange: { _ in })
-        } else {
-            Text("Bookmark destination not found")
-        }
+        .padding(.vertical, 4)
     }
     
     private var categoryIcon: String {
@@ -392,45 +331,4 @@ struct BookmarkRow: View {
         }
         return "bookmark"
     }
-}
-
-#Preview {
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(
-        for: Bookmark.self,
-        Book.self,
-        Chapter.self,
-        Verse.self,
-        configurations: config
-    )
-    
-    let context = container.mainContext
-    let book = Book(name: "Psalms", order: 19, testament: "OT")
-    let chapter = Chapter(number: 23, book: book)
-    let verse = Verse(number: 1, text: "The LORD is my shepherd; I shall not want.", chapter: chapter)
-    
-    let bookmark1 = Bookmark(
-        title: "Shepherd Psalm",
-        verse: verse,
-        category: BookmarkCategory.comfort.rawValue,
-        color: BookmarkCategory.comfort.color,
-        notes: "A beautiful reminder of God's care",
-        isPinned: true
-    )
-    
-    let bookmark2 = Bookmark(
-        title: "Study this chapter",
-        chapter: chapter,
-        category: BookmarkCategory.study.rawValue,
-        color: BookmarkCategory.study.color
-    )
-    
-    context.insert(book)
-    context.insert(chapter)
-    context.insert(verse)
-    context.insert(bookmark1)
-    context.insert(bookmark2)
-    
-    return BookmarksView()
-        .modelContainer(container)
 }

@@ -2,11 +2,14 @@
 //  HighlightableVerseView.swift
 //  WrittenWord
 //
-//  Phase 1: Enhanced verse display with highlighting
+//  Enhanced verse display with highlighting and proper line spacing support
 //
+
 import SwiftUI
 import SwiftData
+import UIKit
 
+// MARK: - Main Highlightable Verse View
 struct HighlightableVerseView: View {
     let verse: Verse
     @Binding var selectedText: String
@@ -37,19 +40,20 @@ struct HighlightableVerseView: View {
                 .frame(width: 36)
             
             // Verse text with highlights
-            HighlightedText(
+            SelectableTextView(
                 text: verse.text,
                 highlights: verseHighlights,
                 fontSize: fontSize,
                 fontFamily: fontFamily,
                 lineSpacing: lineSpacing,
-                onTextSelected: { range, text in
+                selectedRange: $selectedRange,
+                onHighlight: { range, text in
                     selectedRange = range
                     selectedText = text
                     showHighlightMenu = true
                 }
             )
-            .textSelection(.enabled)
+            .foregroundColor(colorTheme.textColor)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 8)
@@ -57,50 +61,7 @@ struct HighlightableVerseView: View {
     }
 }
 
-struct HighlightedText: View {
-    let text: String
-    let highlights: [Highlight]
-    let fontSize: Double
-    let fontFamily: FontFamily
-    let lineSpacing: Double
-    let onTextSelected: (NSRange, String) -> Void
-    
-    @State private var showingSelectionMenu = false
-    
-    var attributedString: AttributedString {
-        var attributed = AttributedString(text)
-        attributed.font = fontFamily.font(size: fontSize)
-        
-        // Apply highlights
-        for highlight in highlights {
-            // Convert Int indices to String indices
-            let stringStartIndex = text.index(text.startIndex, offsetBy: highlight.startIndex)
-            let stringEndIndex = text.index(text.startIndex, offsetBy: min(highlight.endIndex, text.count))
-            
-            // Convert String range to AttributedString range
-            if let attrRange = Range<AttributedString.Index>(stringStartIndex..<stringEndIndex, in: attributed) {
-                attributed[attrRange].backgroundColor = highlight.highlightColor
-            }
-        }
-        
-        return attributed
-    }
-    
-    var body: some View {
-        Text(attributedString)
-            .lineSpacing(lineSpacing)
-            .contextMenu {
-                Button {
-                    // Handle text selection for highlighting
-                    // This is a simplified version - actual implementation would need UITextView
-                } label: {
-                    Label("Highlight", systemImage: "highlighter")
-                }
-            }
-    }
-}
-
-// MARK: - UIKit-based highlightable text view for better text selection
+// MARK: - Selectable Text View (UIKit-based for proper text selection)
 struct SelectableTextView: UIViewRepresentable {
     let text: String
     let highlights: [Highlight]
@@ -109,7 +70,7 @@ struct SelectableTextView: UIViewRepresentable {
     let lineSpacing: Double
     @Binding var selectedRange: NSRange?
     let onHighlight: (NSRange, String) -> Void
-    
+
     func makeUIView(context: Context) -> UITextView {
         let textView = UITextView()
         textView.delegate = context.coordinator
@@ -118,19 +79,66 @@ struct SelectableTextView: UIViewRepresentable {
         textView.backgroundColor = .clear
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
-        
+        textView.isSelectable = true
+        textView.isUserInteractionEnabled = true
+
+        // Enable text wrapping
+        textView.textContainer.lineBreakMode = .byWordWrapping
+        textView.textContainer.maximumNumberOfLines = 0
+        textView.textContainer.widthTracksTextView = true
+
+        // Set proper content priorities for wrapping
+        textView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        textView.setContentHuggingPriority(.required, for: .vertical)
+        textView.setContentCompressionResistancePriority(.required, for: .vertical)
+        textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
         return textView
     }
-    
+
     func updateUIView(_ uiView: UITextView, context: Context) {
+        // Build attributed text with proper line spacing
+        let attributedText = buildAttributedText()
+        uiView.attributedText = attributedText
+
+        // Force layout update to reflect line spacing changes
+        uiView.invalidateIntrinsicContentSize()
+        uiView.setNeedsLayout()
+        uiView.layoutIfNeeded()
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    private func buildAttributedText() -> NSAttributedString {
         let attributedText = NSMutableAttributedString(string: text)
         
-        // Set base font and spacing
+        // Set base font and line spacing - THIS IS THE KEY FIX
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = lineSpacing
+        paragraphStyle.lineSpacing = lineSpacing  // ← Line spacing applied here
+        paragraphStyle.lineBreakMode = .byWordWrapping
+        
+        // Get font based on family
+        let baseFont: UIFont
+        switch fontFamily {
+        case .system:
+            baseFont = UIFont.systemFont(ofSize: fontSize)
+        case .serif:
+            baseFont = UIFont(name: "Georgia", size: fontSize) ?? UIFont.systemFont(ofSize: fontSize)
+        case .monospaced:
+            baseFont = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        case .rounded:
+            let system = UIFont.systemFont(ofSize: fontSize, weight: .regular)
+            if let roundedDescriptor = system.fontDescriptor.withDesign(.rounded) {
+                baseFont = UIFont(descriptor: roundedDescriptor, size: fontSize)
+            } else {
+                baseFont = system
+            }
+        }
         
         let baseAttributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: fontSize),
+            .font: baseFont,
             .paragraphStyle: paragraphStyle
         ]
         
@@ -139,18 +147,16 @@ struct SelectableTextView: UIViewRepresentable {
         // Apply highlights
         for highlight in highlights {
             let range = NSRange(location: highlight.startIndex, length: highlight.endIndex - highlight.startIndex)
-            if range.location + range.length <= attributedText.length {
-                attributedText.addAttribute(.backgroundColor, 
-                                          value: UIColor(highlight.highlightColor), 
-                                          range: range)
+            if range.location >= 0 && range.location + range.length <= attributedText.length {
+                attributedText.addAttribute(
+                    .backgroundColor,
+                    value: UIColor(highlight.highlightColor),
+                    range: range
+                )
             }
         }
         
-        uiView.attributedText = attributedText
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+        return attributedText
     }
     
     class Coordinator: NSObject, UITextViewDelegate {
@@ -162,16 +168,16 @@ struct SelectableTextView: UIViewRepresentable {
         
         func textViewDidChangeSelection(_ textView: UITextView) {
             let selectedRange = textView.selectedRange
-            if selectedRange.length > 0 {
+            if selectedRange.length > 0,
+               let selectedText = textView.text(in: textView.selectedTextRange!) {
                 parent.selectedRange = selectedRange
-                if let selectedText = textView.text(in: textView.selectedTextRange!) {
-                    parent.onHighlight(selectedRange, selectedText)
-                }
+                parent.onHighlight(selectedRange, selectedText)
             }
         }
     }
 }
 
+// MARK: - SwiftUI Preview
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(
@@ -181,17 +187,6 @@ struct SelectableTextView: UIViewRepresentable {
     )
     
     let verse = Verse(number: 1, text: "In the beginning God created the heaven and the earth.")
-    container.mainContext.insert(verse)
-    
-    let highlight = Highlight(
-        verseId: verse.id,
-        startIndex: 17,
-        endIndex: 20,
-        color: .yellow,
-        text: "God",
-        verse: verse
-    )
-    container.mainContext.insert(highlight)
     
     return HighlightableVerseView(
         verse: verse,
@@ -200,5 +195,4 @@ struct SelectableTextView: UIViewRepresentable {
         showHighlightMenu: .constant(false)
     )
     .modelContainer(container)
-    .padding()
 }

@@ -120,29 +120,29 @@ struct FullPagePencilKitCanvas: UIViewRepresentable {
 }
 
 #Preview {
-    do {
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(
-            for: Book.self,
-            Chapter.self,
-            Verse.self,
-            Note.self,
-            configurations: config
-        )
-        
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try? ModelContainer(
+        for: Book.self,
+        Chapter.self,
+        Verse.self,
+        Note.self,
+        configurations: config
+    )
+
+    if let container {
         let book = Book(name: "Genesis", order: 1, testament: "OT")
         let chapter = Chapter(number: 1)
         chapter.book = book
         book.chapters = [chapter]
-        
+
         let verse = Verse(number: 1, text: "In the beginning, God created the heavens and the earth.", chapter: chapter)
         chapter.verses = [verse]
-        
+
         return NavigationStack {
-            ChapterView(chapter: chapter, onChapterChange: { _ in })
+            FullPageDrawingView(chapter: chapter)
         }
         .modelContainer(container)
-    } catch {
-        return Text("Failed to create preview: \(error.localizedDescription)")
+    } else {
+        return Text("Failed to create preview model container")
     }
 }

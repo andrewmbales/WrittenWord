@@ -85,10 +85,42 @@ func seedDataIfNeeded(container: ModelContainer) async {
         }
         
         print("🌱 Starting fresh database seed...")
-        
+                
         // Load and decode Bible JSON
         print("📖 Loading bundled JSON...")
         let data = try loadBundledJSON(named: "kjv", withExtension: "json")
+        
+        // 🔍 DEBUG: Print first 500 characters of JSON
+        if let jsonString = String(data: data, encoding: .utf8) {
+            print("📄 JSON Preview (first 500 chars):")
+            print(String(jsonString.prefix(500)))
+            print("...")
+        }
+        
+        // 🔍 DEBUG: Try parsing as generic JSON first
+        if let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            print("✅ JSON is an array of \(jsonObject.count) books")
+            
+            if let firstBook = jsonObject.first {
+                print("📖 First book keys: \(firstBook.keys)")
+                
+                if let chapters = firstBook["chapters"] {
+                    print("📑 Chapters type: \(type(of: chapters))")
+                    
+                    // Check if it's an array or dictionary
+                    if let chaptersArray = chapters as? [[String: Any]] {
+                        print("✅ Chapters is an array with \(chaptersArray.count) items")
+                        if let firstChapter = chaptersArray.first {
+                            print("📄 First chapter keys: \(firstChapter.keys)")
+                        }
+                    } else if let chaptersDict = chapters as? [String: Any] {
+                        print("✅ Chapters is a dictionary with keys: \(chaptersDict.keys)")
+                    }
+                }
+            }
+        }
+        
+        // Now try actual decoding
         let decoded = try JSONDecoder().decode([DecodableBook].self, from: data)
         print("✅ Decoded \(decoded.count) books")
 
@@ -211,20 +243,51 @@ func seedExpandedInterlinearData(modelContext: ModelContext) async throws {
 // You'll need to keep your existing seedJohn1Interlinear, seedGenesis1Interlinear,
 // and seedPsalm23Interlinear functions from your current code
 
-// MARK: - Decodable Models (keep your existing ones)
+// MARK: - Decodable Models
 
 struct DecodableBook: Decodable {
     let name: String
+    let abbrev: String
     let testament: String?
     let chapters: [DecodableChapter]
+    
+    enum CodingKeys: String, CodingKey {
+        case name
+        case abbrev
+        case testament
+        case chapters
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        name = try container.decode(String.self, forKey: .name)
+        abbrev = try container.decode(String.self, forKey: .abbrev)
+        testament = try? container.decode(String.self, forKey: .testament)
+        
+        // Decode chapters as array of string arrays
+        // Format: "chapters": [["verse1", "verse2", ...], ["verse1", "verse2", ...]]
+        let versesArrays = try container.decode([[String]].self, forKey: .chapters)
+        
+        chapters = versesArrays.enumerated().map { chapterIndex, verses in
+            let decodedVerses = verses.enumerated().map { verseIndex, text in
+                DecodableVerse(number: verseIndex + 1, text: text)
+            }
+            return DecodableChapter(number: chapterIndex + 1, verses: decodedVerses)
+        }
+    }
 }
 
 struct DecodableChapter: Decodable {
     let number: Int
     let verses: [DecodableVerse]
+    
+    // No custom decoder needed - initialized from DecodableBook
 }
 
 struct DecodableVerse: Decodable {
     let number: Int
     let text: String
+    
+    // No custom decoder needed - initialized from DecodableBook
 }

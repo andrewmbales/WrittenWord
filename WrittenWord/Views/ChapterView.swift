@@ -20,6 +20,9 @@ struct ChapterView: View {
     @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
     @AppStorage("fontFamily") private var fontFamily: FontFamily = .system
 
+    // ✅ ADD: Force recreation counter
+    @State private var textViewRecreationID = UUID()
+    
     let onChapterChange: (Chapter) -> Void
     
     // MARK: - Initialization
@@ -43,6 +46,19 @@ struct ChapterView: View {
                 viewModel = ChapterViewModel(chapter: chapter, modelContext: modelContext)
                 await viewModel?.loadChapterNote()
             }
+        }
+        // ✅ ADD: Watch for setting changes and force recreation
+        .onChange(of: lineSpacing) { _, _ in
+            textViewRecreationID = UUID()
+        }
+        .onChange(of: fontSize) { _, _ in
+            textViewRecreationID = UUID()
+        }
+        .onChange(of: fontFamily) { _, _ in
+            textViewRecreationID = UUID()
+        }
+        .onChange(of: colorTheme) { _, _ in
+            textViewRecreationID = UUID()
         }
     }
     
@@ -126,54 +142,42 @@ struct ChapterView: View {
     @ViewBuilder
     private func chapterContent(_ vm: ChapterViewModel) -> some View {
         ZStack {
-            // Base layer: Scrollable verses
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(vm.filteredVerses) { verse in
-                            VerseRow(
-                                verse: verse,
-                                highlights: vm.highlightsForVerse(verse.id),  // Pass cached highlights
-                                fontSize: fontSize,
-                                lineSpacing: lineSpacing,
-                                fontFamily: fontFamily,
-                                colorTheme: colorTheme,
-                                onTextSelected: { range, text in
-                                    vm.selectTextForHighlight(
-                                        verse: verse,
-                                        range: range,
-                                        text: text
-                                    )
-                                },
-                                onBookmark: {
-                                    vm.verseToBookmark = verse
-                                    vm.showingBookmarkSheet = true
-                                }
-                            )
-                            .id(verse.id)
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 20)
+                    // ✅ DEBUG: Print current values
+                    let _ = print("🔧 ChapterView Building Text View:")
+                    let _ = print("   fontSize: \(fontSize)")
+                    let _ = print("   lineSpacing: \(lineSpacing)")
+                    let _ = print("   fontFamily: \(fontFamily.rawValue)")
+                    let _ = print("   colorTheme: \(colorTheme.rawValue)")
+                    let _ = print("   ID: \(fontSize)-\(lineSpacing)-\(fontFamily.rawValue)-\(colorTheme.rawValue)")
+                    
+                    WordSelectableChapterTextView(
+                        verses: vm.filteredVerses,
+                        highlights: vm.filteredVerses.flatMap { verse in
+                            vm.highlightsForVerse(verse.id)
+                        },
+                        fontSize: fontSize,
+                        fontFamily: fontFamily,
+                        lineSpacing: lineSpacing,
+                        colorTheme: colorTheme,
+                        onTextSelected: { verse, range, text in
+                            vm.selectTextForHighlight(verse: verse, range: range, text: text)
                         }
-                        
-                        if let nextChapter = vm.nextChapter, vm.searchText.isEmpty {
-                            ChapterContinueButton(chapter: nextChapter) {
-                                onChapterChange(nextChapter)
-                            }
-                        }
-                    }
+                    )
+                    .id(textViewRecreationID)  // ✅ Use UUID that changes on settings change
                     .padding(.vertical)
-                    .task {
-                        if let firstVerse = vm.filteredVerses.first {
-                            try? await Task.sleep(for: .milliseconds(100))
-                            proxy.scrollTo(firstVerse.id, anchor: .top)
+                    
+                    if let nextChapter = vm.nextChapter, vm.searchText.isEmpty {
+                        ChapterContinueButton(chapter: nextChapter) {
+                            onChapterChange(nextChapter)
                         }
                     }
                 }
-                // Disable scroll when annotating
                 .allowsHitTesting(vm.selectedTool == .none)
             }
             
-            // Annotation layer overlay
+            // Annotation overlay
             if vm.showAnnotations {
                 GeometryReader { geometry in
                     FullPageAnnotationCanvas(

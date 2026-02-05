@@ -2,288 +2,98 @@
 //  MainView.swift
 //  WrittenWord
 //
-//  Enhanced version with improved UI/UX
+//  ENHANCED: Search as detail view instead of sheet
 //
+
 import SwiftUI
 import SwiftData
 
 struct MainView: View {
-    @State private var selectedBook: Book?
     @State private var selectedChapter: Chapter?
-    @State private var selectedView: SidebarViewType? = .bible
+    @State private var showingSearch = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var showingNoteColumn = false
-    @AppStorage("notePosition") private var notePosition: NotePosition = .right
-    @State private var navigationPath = NavigationPath()
-    
+    @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
+
     var body: some View {
-        Group {
-            if notePosition == .right {
-                notesOnRightLayout
-            } else {
-                notesOnLeftLayout
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            // Sidebar
+            SidebarView(
+                selectedChapter: $selectedChapter,
+                showingSearch: $showingSearch,
+                onNavigationAction: {
+                    // Auto-collapse sidebar when navigation buttons are tapped
+                    withAnimation {
+                        columnVisibility = .detailOnly
+                    }
+                }
+            )
+            .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
+        } detail: {
+            // Detail view - either Chapter or Search
+            Group {
+                if showingSearch {
+                    GlobalSearchView()
+                        .onDisappear {
+                            showingSearch = false
+                        }
+                } else if let chapter = selectedChapter {
+                    ChapterView(
+                        chapter: chapter,
+                        onChapterChange: { newChapter in
+                            selectedChapter = newChapter
+                        }
+                    )
+                    .id(chapter.id)
+                } else {
+                    emptyStateView
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationSplitViewColumnWidth(min: 600, ideal: 900)
         }
-        .onChange(of: selectedChapter) { oldValue, newValue in
+        .navigationSplitViewStyle(.balanced)
+        .preferredColorScheme(colorTheme == .dark ? .dark : colorTheme == .light ? .light : nil)
+        .background(colorTheme.backgroundColor)
+        .onChange(of: selectedChapter) { _, newValue in
+            // When selecting a chapter, hide search and collapse sidebar
             if newValue != nil {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showingSearch = false
+                withAnimation {
                     columnVisibility = .detailOnly
                 }
-            } else if selectedBook != nil {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    columnVisibility = .all
-                }
-            }
-        }
-        .onChange(of: selectedBook) { oldValue, newValue in
-            selectedChapter = nil
-            withAnimation(.easeOut(duration: 0.2)) {
-                showingNoteColumn = false
-            }
-            if newValue == nil {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    columnVisibility = .all
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .showNotesColumn)) { notification in
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                showingNoteColumn = true
             }
         }
     }
     
-    private var notesOnRightLayout: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(selectedBook: $selectedBook)
-        } content: {
-            if let selectedBook {
-                ChapterListView(book: selectedBook, selectedChapter: $selectedChapter)
-                    .transition(.opacity)
-            } else {
-                ContentUnavailableView(
-                    "Select a Book",
-                    systemImage: "book.closed.fill",
-                    description: Text("Choose a book from the sidebar to begin reading")
-                )
-            }
-        } detail: {
-            if let selectedChapter {
-                ChapterView(chapter: selectedChapter, onChapterChange: navigateToChapter)
-                    .frame(maxWidth: .infinity)
-                    .onAppear {
-                        // Ensure columns are minimized when chapter is selected
-                        if columnVisibility != .detailOnly {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                columnVisibility = .detailOnly
-                            }
-                        }
-                    }
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .leading).combined(with: .opacity),
-                        removal: .opacity
-                    ))
-            } else {
-                ContentUnavailableView(
-                    "Select a Chapter",
-                    systemImage: "book.pages.fill",
-                    description: Text("Choose a chapter to read")
-                )
-                    .frame(maxWidth: .infinity)
-                }
-        }
-    }
-    
-    private func navigateToChapter(_ chapter: Chapter) {
-        print("navigateToChapter called: \(chapter.book?.name ?? "") \(chapter.number)")
-        selectedChapter = chapter
-        navigationPath = NavigationPath()
-    }
-    
-    private var notesOnLeftLayout: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(selectedBook: $selectedBook)
-        } content: {
-            if showingNoteColumn {
-                NotesColumn(
-                    chapter: selectedChapter,
-                    onClose: { 
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showingNoteColumn = false
-                        }
-                    }
-                )
-                .transition(.move(edge: .leading).combined(with: .opacity))
-            } else if let selectedBook {
-                ChapterListView(book: selectedBook, selectedChapter: $selectedChapter)
-                    .transition(.opacity)
-            } else {
-                ContentUnavailableView(
-                    "Select a Book",
-                    systemImage: "book.closed.fill",
-                    description: Text("Choose a book from the sidebar to begin reading")
-                )
-            }
-        } detail: {
-            if let selectedChapter {
-                ChapterView(chapter: selectedChapter, onChapterChange: navigateToChapter)
-                    .frame(maxWidth: .infinity)
-                    .onAppear {
-                        // Ensure columns are minimized when chapter is selected
-                        if columnVisibility != .detailOnly {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                columnVisibility = .detailOnly
-                            }
-                        }
-                    }
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .leading).combined(with: .opacity),
-                        removal: .opacity
-                    ))
-            } else {
-                ContentUnavailableView(
-                    "Select a Chapter",
-                    systemImage: "book.pages.fill",
-                    description: Text("Choose a chapter to read")
-                )
-                .frame(maxWidth: .infinity)
-            }
-        }
+    private var emptyStateView: some View {
+        ContentUnavailableView(
+            "Select a Chapter",
+            systemImage: "book.pages.fill",
+            description: Text("Choose a chapter from the sidebar to begin reading")
+        )
     }
 }
 
-enum NotePosition: String, CaseIterable {
-    case left = "left"
-    case right = "right"
+#Preview {
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(
+        for: Book.self,
+        Chapter.self,
+        Verse.self,
+        Note.self,
+        Highlight.self,
+        Bookmark.self,
+        configurations: config
+    )
     
-    var displayName: String {
-        switch self {
-        case .left: return "Left"
-        case .right: return "Right"
-        }
-    }
-}
-
-extension Notification.Name {
-    static let showNotesColumn = Notification.Name("showNotesColumn")
-}
-
-struct NoteCard: View {
-    let note: Note
+    let book = Book(name: "Genesis", order: 1, testament: "OT")
+    let chapter = Chapter(number: 1, book: book)
+    let verse1 = Verse(number: 1, text: "In the beginning God created the heaven and the earth.", chapter: chapter)
     
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(note.title.isEmpty ? "Untitled Note" : note.title)
-                .font(.headline)
-                .lineLimit(2)
-                .foregroundStyle(.primary)
-            
-            if !note.content.isEmpty {
-                Text(note.content)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-            }
-            
-            HStack {
-                Image(systemName: "clock")
-                    .font(.caption2)
-                Text(note.updatedAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-            }
-            .foregroundStyle(.tertiary)
-        }
-        .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
-    }
-}
-
-struct NotesColumn: View {
-    let chapter: Chapter?
-    let onClose: () -> Void
+    container.mainContext.insert(book)
+    container.mainContext.insert(chapter)
+    container.mainContext.insert(verse1)
     
-    @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Note.updatedAt, order: .reverse) private var notes: [Note]
-    @State private var showingNewNote = false
-    
-    var chapterNotes: [Note] {
-        guard let chapter = chapter else { return [] }
-        return notes.filter { $0.chapter?.id == chapter.id }
-    }
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("Notes")
-                    .font(.title3.bold())
-                Spacer()
-                Button(action: onClose) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .symbolRenderingMode(.hierarchical)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding()
-            .background(.ultraThinMaterial)
-            
-            Divider()
-            
-            if chapterNotes.isEmpty {
-                ContentUnavailableView {
-                    Label("No Notes", systemImage: "note.text")
-                } description: {
-                    Text("Tap the + button to create your first note")
-                }
-                .padding()
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(chapterNotes) { note in
-                            NavigationLink(destination: FullPageDrawingView(note: note)) {
-                                NoteCard(note: note)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding()
-                }
-            }
-            
-            Divider()
-            
-            HStack {
-                Spacer()
-                Button(action: { showingNewNote = true }) {
-                    Label("New Note", systemImage: "plus.circle.fill")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(Color.accentColor)
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                Spacer()
-            }
-            .padding()
-            .background(.ultraThinMaterial)
-        }
-        .background(Color(.systemGroupedBackground))
-        .sheet(isPresented: $showingNewNote) {
-            NavigationStack {
-                if let chapter = chapter {
-                    FullPageDrawingView(chapter: chapter)
-                } else {
-                    Text("No chapter selected")
-                }
-            }
-        }
-    }
+    return MainView()
+        .modelContainer(container)
 }
