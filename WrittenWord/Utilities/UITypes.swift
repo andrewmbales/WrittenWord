@@ -8,7 +8,7 @@
 import SwiftUI
 
 // MARK: - Note Position
-enum NotePosition: String, CaseIterable {
+enum NotePosition: String, CaseIterable, Hashable {
     case left = "left"
     case right = "right"
     

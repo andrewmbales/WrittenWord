@@ -2,356 +2,576 @@
 //  InterlinearBottomSheet.swift
 //  WrittenWord
 //
-//  Bottom sheet for displaying lexicon-style word lookup with definitions and verse references
+//  Enhanced bottom sheet with draggable height, snap points, and copy functionality
 //
 
 import SwiftUI
-import SwiftData
 
 struct InterlinearBottomSheet: View {
     let word: Word
-    let lexiconEntry: LexiconEntry
-    let onCopy: () -> Void
-    let onAddNote: () -> Void
-    let onHighlight: () -> Void
-    let onNavigateToVerse: (VerseReference) -> Void
-    @Environment(\.dismiss) var dismiss
-
+    let onDismiss: () -> Void
+    
+    // Snap point heights
+    private let peekHeight: CGFloat = 180
+    private let mediumHeight: CGFloat = 400
+    private let largeHeight: CGFloat = 600
+    
+    @State private var currentHeight: CGFloat = 400 // Start at medium
+    @State private var dragOffset: CGFloat = 0
+    @State private var showMorphologyDetails = false
+    @State private var showCopyConfirmation = false
+    @State private var copiedItem: String = ""
+    
+    private var parsedMorphology: MorphologyParser.ParsedMorphology? {
+        guard let morphology = word.morphology else { return nil }
+        return MorphologyParser.parse(morphology)
+    }
+    
+    private var partOfSpeechColor: Color {
+        guard let parsed = parsedMorphology else { return .gray }
+        
+        // Convert color string to SwiftUI Color
+        switch parsed.color.lowercased() {
+        case "blue": return .blue
+        case "green": return .green
+        case "orange": return .orange
+        case "purple": return .purple
+        case "red": return .red
+        case "yellow": return .yellow
+        case "indigo": return .indigo
+        case "cyan": return .cyan
+        case "gray": return .gray
+        default: return .blue
+        }
+    }
+    
     var body: some View {
-        NavigationView {
-            ZStack {
-                // Dark charcoal background
-                Color(red: 0.15, green: 0.15, blue: 0.17)
-                    .ignoresSafeArea()
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        // Header Section
-                        VStack(alignment: .leading, spacing: 8) {
-                            // Greek word - large and bold
-                            Text(lexiconEntry.originalText)
-                                .font(.system(size: 36, weight: .bold))
-                                .foregroundColor(.white)
-
-                            // Transliteration in italics
-                            HStack(spacing: 4) {
-                                Text("[\(lexiconEntry.transliteration)]")
-                                    .font(.system(size: 18))
-                                    .italic()
-                                    .foregroundColor(.white.opacity(0.8))
-
-                                // Part of speech indicator
-                                let parsed = MorphologyParser.parse(word.morphology ?? "")
-                                if !parsed.partOfSpeech.isEmpty {
-                                    Text(parsed.partOfSpeech.lowercased() + ".")
-                                        .font(.system(size: 18))
-                                        .italic()
-                                        .foregroundColor(.white.opacity(0.8))
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                // Left spacer (25%)
+                Spacer()
+                
+                // Center sheet (50%)
+                VStack(spacing: 0) {
+                    // Drag handle
+                    dragHandle
+                    
+                    // Content
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 20) {
+                            // Header
+                            header
+                            
+                            Divider()
+                            
+                            // Quick actions - Copy buttons
+                            quickActionsSection
+                            
+                            Divider()
+                            
+                            // Transliteration & Metadata
+                            transliterationSection
+                            
+                            Divider()
+                            
+                            // Translation
+                            translationSection
+                            
+                            Divider()
+                            
+                            // Gloss/Definition
+                            glossSection
+                            
+                            // Morphology (only visible at medium/large)
+                            if currentHeight >= mediumHeight - 50 {
+                                if let parsed = parsedMorphology {
+                                    Divider()
+                                    morphologySection(parsed: parsed)
                                 }
                             }
-
-                            // Part of speech label
-                            Text(lexiconEntry.partOfSpeechLabel)
-                                .font(.system(size: 14))
-                                .foregroundColor(.white.opacity(0.6))
-                                .padding(.top, 4)
-
-                            // Found X verses indicator
-                            Text("Found \(lexiconEntry.totalOccurrences) verses")
-                                .font(.system(size: 13))
-                                .foregroundColor(.blue.opacity(0.9))
-                                .padding(.top, 8)
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 24)
-                        .padding(.bottom, 20)
-
-                        // Definitions Section
-                        VStack(alignment: .leading, spacing: 20) {
-                            ForEach(lexiconEntry.definitions) { definition in
-                                DefinitionRow(
-                                    definition: definition,
-                                    onNavigateToVerse: onNavigateToVerse
-                                )
+                            
+                            // Language indicator
+                            languageIndicator
+                            
+                            // Size hint at peek
+                            if currentHeight < peekHeight + 50 {
+                                Text("Pull up for more details")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                    .padding(.top, 8)
                             }
+                            
+                            // Bottom padding
+                            Color.clear.frame(height: 20)
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
-
-                        // Source Attribution
-                        Text(lexiconEntry.source)
-                            .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.5))
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 24)
+                        .padding(.vertical)
                     }
                 }
-
-                // Action Buttons at bottom
-                VStack {
-                    Spacer()
-
-                    HStack(spacing: 16) {
-                        // Copy Button
-                        ActionButton(
-                            icon: "doc.on.doc",
-                            title: "Copy",
-                            action: {
-                                onCopy()
-                                dismiss()
-                            }
-                        )
-
-                        // Add Note Button
-                        ActionButton(
-                            icon: "note.text.badge.plus",
-                            title: "Add Note",
-                            action: {
-                                onAddNote()
-                                dismiss()
-                            }
-                        )
-
-                        // Highlight Button
-                        ActionButton(
-                            icon: "highlighter",
-                            title: "Highlight",
-                            action: {
-                                onHighlight()
-                                dismiss()
-                            }
+                .frame(width: max(0, geometry.size.width * 0.5), height: max(0, currentHeight + dragOffset))
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(uiColor: .systemBackground))
+                        .shadow(color: .black.opacity(0.15), radius: 10, y: -3)
+                )
+                .overlay(
+                    // Copy confirmation toast
+                    copyConfirmationToast
+                        .opacity(showCopyConfirmation ? 1 : 0)
+                        .animation(.easeInOut(duration: 0.2), value: showCopyConfirmation)
+                    , alignment: .top
+                )
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            dragOffset = value.translation.height
+                        }
+                        .onEnded { value in
+                            snapToNearestDetent(dragVelocity: value.predictedEndTranslation.height)
+                            dragOffset = 0
+                        }
+                )
+                
+                // Right spacer (25%)
+                Spacer()
+            }
+            .frame(maxHeight: .infinity, alignment: .bottom)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: currentHeight)
+        }
+        .allowsHitTesting(true)
+    }
+    
+    // MARK: - Components
+    
+    private var dragHandle: some View {
+        RoundedRectangle(cornerRadius: 3)
+            .fill(Color.secondary.opacity(0.3))
+            .frame(width: 36, height: 5)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
+    }
+    
+    private var header: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Word Lookup")
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+                
+                Text(word.originalText)
+                    .font(.system(size: 32, weight: .semibold))
+            }
+            
+            Spacer()
+            
+            // Size controls
+            HStack(spacing: 12) {
+                // Expand/Collapse buttons
+                Button {
+                    withAnimation {
+                        currentHeight = currentHeight >= largeHeight ? mediumHeight : largeHeight
+                    }
+                } label: {
+                    Image(systemName: currentHeight >= largeHeight ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
+                }
+                
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal)
+    }
+    
+    private var quickActionsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Quick Actions")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.horizontal)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    CopyButton(
+                        label: "Original",
+                        text: word.originalText,
+                        icon: "doc.on.doc",
+                        color: partOfSpeechColor,
+                        onCopy: { showCopyFeedback("Original text") }
+                    )
+                    
+                    CopyButton(
+                        label: "Transliteration",
+                        text: word.transliteration,
+                        icon: "textformat.abc",
+                        color: .blue,
+                        onCopy: { showCopyFeedback("Transliteration") }
+                    )
+                    
+                    if let strongsNumber = word.strongsNumber {
+                        CopyButton(
+                            label: "Strong's",
+                            text: strongsNumber,
+                            icon: "number",
+                            color: .purple,
+                            onCopy: { showCopyFeedback("Strong's number") }
                         )
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
-                    .background(
-                        Color(red: 0.12, green: 0.12, blue: 0.14)
-                            .shadow(color: .black.opacity(0.3), radius: 8, y: -4)
+                    
+                    CopyButton(
+                        label: "Meaning",
+                        text: word.gloss,
+                        icon: "quote.bubble",
+                        color: .orange,
+                        onCopy: { showCopyFeedback("Meaning") }
+                    )
+                    
+                    CopyButton(
+                        label: "All",
+                        text: formatFullWordInfo(),
+                        icon: "doc.on.clipboard",
+                        color: .green,
+                        onCopy: { showCopyFeedback("All information") }
                     )
                 }
+                .padding(.horizontal)
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(.white.opacity(0.6))
-                    }
-                }
-            }
-            .toolbarBackground(.hidden, for: .navigationBar)
         }
     }
-}
-
-// MARK: - Definition Row
-
-struct DefinitionRow: View {
-    let definition: Definition
-    let onNavigateToVerse: (VerseReference) -> Void
-
-    var body: some View {
+    
+    private var transliterationSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Main definition
-            HStack(alignment: .top, spacing: 8) {
-                // Number
-                Text("\(definition.number).")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 24, alignment: .leading)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    // Meaning
-                    Text(definition.meaning)
-                        .font(.system(size: 16))
-                        .foregroundColor(.white)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    // Verse references
-                    if !definition.verseReferences.isEmpty {
-                        VerseReferenceTagsView(
-                            references: definition.verseReferences,
-                            onTap: onNavigateToVerse
-                        )
-                    }
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Transliteration")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Text(word.transliteration)
+                        .font(.title3)
+                        .italic()
                 }
-            }
-
-            // Sub-definitions
-            if !definition.subDefinitions.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(definition.subDefinitions) { subDef in
-                        HStack(alignment: .top, spacing: 8) {
-                            // Letter (a, b, c, d)
-                            Text("\(subDef.letter).")
-                                .font(.system(size: 15))
-                                .foregroundColor(.white.opacity(0.8))
-                                .frame(width: 40, alignment: .trailing)
-
-                            VStack(alignment: .leading, spacing: 8) {
-                                // Sub-meaning
-                                Text(subDef.meaning)
-                                    .font(.system(size: 15))
-                                    .foregroundColor(.white.opacity(0.9))
-                                    .fixedSize(horizontal: false, vertical: true)
-
-                                // Sub-definition verse references
-                                if !subDef.verseReferences.isEmpty {
-                                    VerseReferenceTagsView(
-                                        references: subDef.verseReferences,
-                                        onTap: onNavigateToVerse
-                                    )
-                                }
-                            }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 8) {
+                    if let strongsNumber = word.strongsNumber {
+                        Text(strongsNumber)
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.blue.opacity(0.1))
+                            .foregroundColor(.blue)
+                            .cornerRadius(4)
+                    }
+                    
+                    if let parsed = parsedMorphology {
+                        HStack(spacing: 4) {
+                            Image(systemName: parsed.icon)
+                                .font(.caption)
+                            Text(parsed.partOfSpeech)
+                                .font(.caption)
                         }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(partOfSpeechColor.opacity(0.15))
+                        .foregroundColor(partOfSpeechColor)
+                        .cornerRadius(4)
                     }
                 }
-                .padding(.leading, 32)
             }
+            .padding(.horizontal)
         }
     }
-}
-
-// MARK: - Verse Reference Tags
-
-struct VerseReferenceTagsView: View {
-    let references: [VerseReference]
-    let onTap: (VerseReference) -> Void
-
-    var body: some View {
-        FlowLayout(spacing: 8) {
-            ForEach(references) { ref in
+    
+    private var translationSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Translated As")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Text(word.translatedText)
+                .font(.title2)
+                .foregroundColor(.primary)
+        }
+        .padding(.horizontal)
+    }
+    
+    private var glossSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Meaning")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Text(word.gloss)
+                .font(.body)
+                .foregroundColor(.primary)
+        }
+        .padding(.horizontal)
+    }
+    
+    private func morphologySection(parsed: MorphologyParser.ParsedMorphology) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Grammar")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+                
                 Button {
-                    onTap(ref)
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showMorphologyDetails.toggle()
+                    }
                 } label: {
-                    Text(ref.display)
-                        .font(.system(size: 13))
-                        .foregroundColor(.blue)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.blue.opacity(0.15))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .strokeBorder(Color.blue.opacity(0.3), lineWidth: 1)
-                        )
+                    HStack(spacing: 4) {
+                        Text(showMorphologyDetails ? "Hide Details" : "Show Details")
+                            .font(.caption)
+                        Image(systemName: showMorphologyDetails ? "chevron.up" : "chevron.down")
+                            .font(.caption)
+                    }
+                    .foregroundColor(partOfSpeechColor)
                 }
             }
+            .padding(.horizontal)
+            
+            Text(parsed.fullDescription)
+                .font(.body)
+                .foregroundColor(.primary)
+                .padding(.horizontal)
+            
+            if showMorphologyDetails && !parsed.grammaticalDetails.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(parsed.grammaticalDetails, id: \.term) { detail in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text(detail.term)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .textCase(.uppercase)
+                                
+                                Text(detail.value)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(partOfSpeechColor)
+                            }
+                            
+                            Text(detail.explanation)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(Color.secondary.opacity(0.05))
+                .cornerRadius(8)
+                .padding(.horizontal)
+            }
+        }
+    }
+    
+    private var languageIndicator: some View {
+        HStack {
+            Image(systemName: languageIcon)
+                .foregroundColor(partOfSpeechColor)
+            Text(languageName)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Spacer()
+            
+            // Show current size hint
+            Text(sizeLabel)
+                .font(.caption2)
+                .foregroundColor(.secondary.opacity(0.6))
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+    }
+    
+    private var copyConfirmationToast: some View {
+        HStack {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(.green)
+            Text("Copied \(copiedItem)")
+                .font(.subheadline)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(uiColor: .systemBackground))
+                .shadow(color: .black.opacity(0.1), radius: 5)
+        )
+        .padding(.top, 16)
+    }
+    
+    // MARK: - Helpers
+    
+    private var sizeLabel: String {
+        if currentHeight >= largeHeight - 50 {
+            return "Large"
+        } else if currentHeight >= mediumHeight - 50 {
+            return "Medium"
+        } else {
+            return "Peek"
+        }
+    }
+    
+    private func snapToNearestDetent(dragVelocity: CGFloat) {
+        let newHeight = currentHeight + dragOffset
+        
+        // Determine snap point based on velocity and position
+        if dragVelocity < -500 {
+            // Fast swipe down - dismiss
+            onDismiss()
+            return
+        } else if dragVelocity > 500 {
+            // Fast swipe up - go to next larger size
+            if currentHeight < mediumHeight {
+                currentHeight = mediumHeight
+            } else if currentHeight < largeHeight {
+                currentHeight = largeHeight
+            }
+            return
+        }
+        
+        // Snap to nearest detent based on position
+        let distances = [
+            (peekHeight, abs(newHeight - peekHeight)),
+            (mediumHeight, abs(newHeight - mediumHeight)),
+            (largeHeight, abs(newHeight - largeHeight))
+        ]
+        
+        let nearest = distances.min(by: { $0.1 < $1.1 })
+        
+        if let targetHeight = nearest?.0 {
+            // If dragging down below peek, dismiss
+            if newHeight < peekHeight - 50 {
+                onDismiss()
+            } else {
+                currentHeight = targetHeight
+            }
+        }
+    }
+    
+    private func formatFullWordInfo() -> String {
+        var info = "\(word.originalText) (\(word.transliteration))\n"
+        
+        if let strongsNumber = word.strongsNumber {
+            info += "\(strongsNumber)\n"
+        }
+        
+        info += "Translated: \(word.translatedText)\n"
+        info += "Meaning: \(word.gloss)\n"
+        
+        if let morphology = word.morphology {
+            info += "Grammar: \(morphology)"
+        }
+        
+        return info
+    }
+    
+    private func showCopyFeedback(_ item: String) {
+        copiedItem = item
+        showCopyConfirmation = true
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            showCopyConfirmation = false
+        }
+    }
+    
+    private var languageName: String {
+        switch word.language {
+        case "grk":
+            return "Greek"
+        case "heb":
+            return "Hebrew"
+        case "arc":
+            return "Aramaic"
+        default:
+            return word.language
+        }
+    }
+    
+    private var languageIcon: String {
+        switch word.language {
+        case "grk":
+            return "character.book.closed"
+        case "heb":
+            return "character.book.closed.fill"
+        case "arc":
+            return "character.book.closed"
+        default:
+            return "book"
         }
     }
 }
 
-// MARK: - Action Button
+// MARK: - Copy Button Component
 
-struct ActionButton: View {
+struct CopyButton: View {
+    let label: String
+    let text: String
     let icon: String
-    let title: String
-    let action: () -> Void
-
+    let color: Color
+    let onCopy: () -> Void
+    
     var body: some View {
-        Button(action: action) {
+        Button {
+            UIPasteboard.general.string = text
+            onCopy()
+        } label: {
             VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 20))
-                    .foregroundColor(.white)
-
-                Text(title)
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.9))
+                    .font(.title3)
+                    .foregroundColor(color)
+                
+                Text(label)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.white.opacity(0.1))
+            .frame(width: 80, height: 70)
+            .background(color.opacity(0.1))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(color.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+#Preview {
+    ZStack {
+        Color.gray.opacity(0.2)
+            .ignoresSafeArea()
+        
+        VStack {
+            Spacer()
+            
+            InterlinearBottomSheet(
+                word: Word(
+                    originalText: "λόγος",
+                    transliteration: "logos",
+                    strongsNumber: "G3056",
+                    gloss: "word, speech, divine utterance",
+                    morphology: "N-NSM",
+                    wordIndex: 4,
+                    startPosition: 25,
+                    endPosition: 29,
+                    translatedText: "Word",
+                    language: "grk"
+                ),
+                onDismiss: {}
             )
         }
     }
 }
-
-// MARK: - Preview
-
-#Preview {
-    let word = Word(
-        originalText: "ἄγγελος",
-        transliteration: "angelos",
-        strongsNumber: "G32",
-        gloss: "angel, messenger",
-        morphology: "Noun - Nominative Masculine Singular",
-        wordIndex: 0,
-        startPosition: 0,
-        endPosition: 5,
-        translatedText: "angel",
-        language: "grk"
-    )
-
-    let entry = LexiconEntry(
-        strongsNumber: "G32",
-        originalText: "ἄγγελος",
-        transliteration: "angelos",
-        partOfSpeechLabel: "ἄγγελος, -ου, ὁ, in LXX",
-        definitions: [
-            Definition(
-                number: 1,
-                meaning: "a messenger",
-                verseReferences: [
-                    VerseReference(book: "Mat", chapter: 11, verse: 10),
-                    VerseReference(book: "Luk", chapter: 7, verse: 24)
-                ],
-                subDefinitions: [
-                    SubDefinition(
-                        letter: "a",
-                        meaning: "in general",
-                        verseReferences: [
-                            VerseReference(book: "Mat", chapter: 11, verse: 10),
-                            VerseReference(book: "Luk", chapter: 7, verse: 24)
-                        ]
-                    ),
-                    SubDefinition(
-                        letter: "b",
-                        meaning: "specially, of the messengers of God",
-                        verseReferences: [
-                            VerseReference(book: "Mat", chapter: 1, verse: 20),
-                            VerseReference(book: "Luk", chapter: 1, verse: 11)
-                        ]
-                    )
-                ]
-            ),
-            Definition(
-                number: 2,
-                meaning: "an angel, a celestial spirit",
-                verseReferences: [
-                    VerseReference(book: "Mat", chapter: 4, verse: 11),
-                    VerseReference(book: "Mat", chapter: 28, verse: 2)
-                ],
-                subDefinitions: [
-                    SubDefinition(
-                        letter: "a",
-                        meaning: "of God's messengers",
-                        verseReferences: [
-                            VerseReference(book: "Mat", chapter: 4, verse: 11)
-                        ]
-                    )
-                ]
-            )
-        ],
-        totalOccurrences: 172,
-        source: "Abbott-Smith. A Manual Greek Lexicon of the New Testament. Sourced from Tyndale House, Cambridge."
-    )
-
-    InterlinearBottomSheet(
-        word: word,
-        lexiconEntry: entry,
-        onCopy: { print("Copy") },
-        onAddNote: { print("Add Note") },
-        onHighlight: { print("Highlight") },
-        onNavigateToVerse: { ref in print("Navigate to \(ref.display)") }
-    )
-    .presentationDetents([.medium, .large])
-}
-

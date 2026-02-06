@@ -2,7 +2,8 @@
 //  WordSelectableChapterTextView.swift
 //  WrittenWord
 //
-//  UITextView wrapper with word selection, highlighting, and proper line spacing
+//  UITextView wrapper with word selection, highlighting, proper line spacing,
+//  and optional verse borders for debugging (using underline for visibility)
 //
 
 import SwiftUI
@@ -17,10 +18,13 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
     let lineSpacing: Double
     let colorTheme: ColorTheme
     let onTextSelected: (Verse, NSRange, String) -> Void
+    
+    // Debug option to show verse borders
+    @AppStorage("showVerseBorders") private var showVerseBorders: Bool = false
         
     // Explicit update trigger
     var updateTrigger: String {
-        "\(fontSize)-\(lineSpacing)-\(fontFamily.rawValue)-\(colorTheme.rawValue)"
+        "\(fontSize)-\(lineSpacing)-\(fontFamily.rawValue)-\(colorTheme.rawValue)-\(showVerseBorders)"
     }
         
     func makeUIView(context: Context) -> UITextView {
@@ -61,7 +65,7 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
     }
     
     func updateUIView(_ textView: UITextView, context: Context) {
-        debugLog("rendering", "🔄 Updating UITextView: lineSpacing=\(lineSpacing), verses=\(verses.count)")
+        debugLog("rendering", "🔄 Updating UITextView: lineSpacing=\(lineSpacing), verses=\(verses.count), verseBorders=\(showVerseBorders)")
         
         // Update coordinator with current verses
         context.coordinator.verses = verses
@@ -80,7 +84,7 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
     }
     
     private func buildAttributedText() -> NSAttributedString {
-        debugLog("rendering", "📝 Building attributed text with lineSpacing=\(lineSpacing)")
+        debugLog("rendering", "📝 Building attributed text with lineSpacing=\(lineSpacing), verseBorders=\(showVerseBorders)")
         
         let result = NSMutableAttributedString()
         
@@ -111,6 +115,12 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
             paragraphStyle.minimumLineHeight = desiredTotalLineHeight
             paragraphStyle.maximumLineHeight = desiredTotalLineHeight
             
+            // Add padding between verses when borders are shown
+            if showVerseBorders {
+                paragraphStyle.paragraphSpacing = 12
+                paragraphStyle.paragraphSpacingBefore = 12
+            }
+            
             if index == 0 {
                 debugLog("rendering", "📐 First verse paragraph style: min/max=\(desiredTotalLineHeight), multiplier=\(lineHeightMultiplier)")
             }
@@ -133,8 +143,30 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
             verseText.addAttributes([
                 .font: font,
                 .paragraphStyle: paragraphStyle,
-                .foregroundColor: UIColor(colorTheme.textColor)  // ✅ Wrap in UIColor()
+                .foregroundColor: UIColor(colorTheme.textColor)
             ], range: NSRange(location: 0, length: verseText.length))
+            
+            // Add debug border around verse if enabled (using underline which is more visible)
+            if showVerseBorders {
+                // Background color to make verse boundaries visible
+                verseText.addAttribute(
+                    .backgroundColor,
+                    value: UIColor.systemRed.withAlphaComponent(0.08),
+                    range: NSRange(location: 0, length: verseText.length)
+                )
+                
+                // Use underline to show the verse boundary clearly
+                verseText.addAttribute(
+                    .underlineStyle,
+                    value: NSUnderlineStyle.single.rawValue,
+                    range: NSRange(location: 0, length: verseText.length)
+                )
+                verseText.addAttribute(
+                    .underlineColor,
+                    value: UIColor.systemRed.withAlphaComponent(0.5),
+                    range: NSRange(location: 0, length: verseText.length)
+                )
+            }
             
             // Apply highlights for this verse
             let verseHighlights = highlights.filter { $0.verseId == verse.id }
@@ -148,7 +180,7 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
                    highlightRange.location + highlightRange.length <= verseText.length {
                     verseText.addAttribute(
                         .backgroundColor,
-                        value: UIColor(highlight.highlightColor),  // ✅ Also wrap this
+                        value: UIColor(highlight.highlightColor),
                         range: highlightRange
                     )
                 }
@@ -184,7 +216,7 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
                 return
             }
             
-            debugLog("interaction", "📌 Text selected: range=\(selectedRange), length=\(selectedRange.length)")
+            debugLog("interaction", "📌 Text selected: range=\(selectedRange), length=\(selectedRange.length), text='\(selectedText)'")
             
             // Cancel previous debounce
             selectionDebounceTask?.cancel()
@@ -197,66 +229,82 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
                 guard !Task.isCancelled else { return }
                 
                 // Find which verse this selection belongs to
-                if let verse = self.findVerseForRange(selectedRange, in: textView) {
-                    debugLog("interaction", "📍 Selection in verse \(verse.number)")
+                if let verse = self.findVerseForSelection(selectedRange, in: textView) {
+                    debugLog("interaction", "✅ Found verse \(verse.number) for selection")
                     
-                    // Calculate verse-relative range
-                    if let relativeRange = self.calculateVerseRelativeRange(
-                        selectedRange,
-                        for: verse,
-                        in: textView
-                    ) {
-                        self.parent.onTextSelected(verse, relativeRange, selectedText)
-                    }
+                    // Calculate the offset within the verse text
+                    let verseOffset = self.calculateVerseOffset(for: verse, selectedRange: selectedRange, in: textView)
+                    debugLog("interaction", "📍 Verse offset calculated: \(verseOffset)")
+                    
+                    // Create adjusted range relative to verse text
+                    let adjustedRange = NSRange(location: verseOffset, length: selectedRange.length)
+                    
+                    self.parent.onTextSelected(verse, adjustedRange, selectedText)
+                } else {
+                    debugLog("interaction", "❌ Could not find verse for selection at range \(selectedRange)")
                 }
             }
         }
         
-        private func findVerseForRange(_ range: NSRange, in textView: UITextView) -> Verse? {
-            //let text = textView.attributedText.string
+        /// Find which verse contains the selected range
+        private func findVerseForSelection(_ range: NSRange, in textView: UITextView) -> Verse? {
             var currentPosition = 0
             
             for verse in verses {
+                // Calculate total length for this verse (number + space + text + newline)
                 let verseNumberLength = "\(verse.number) ".count
                 let verseTextLength = verse.text.count
-                let totalLength = verseNumberLength + verseTextLength + 1 // +1 for newline
+                let totalVerseLength = verseNumberLength + verseTextLength + 1 // +1 for newline
                 
-                let verseRange = NSRange(location: currentPosition, length: totalLength)
+                let verseRange = NSRange(location: currentPosition, length: totalVerseLength)
                 
-                if NSIntersectionRange(range, verseRange).length > 0 {
+                debugLog("interaction", "🔍 Checking verse \(verse.number): range=\(verseRange), selection=\(range)")
+                
+                // Check if selection starts within this verse's range
+                if range.location >= currentPosition && range.location < currentPosition + totalVerseLength {
+                    debugLog("interaction", "✅ Selection belongs to verse \(verse.number)")
+                    
+                    // CRITICAL: Check if verse has any interlinear words loaded
+                    debugLog("interaction", "📚 Verse \(verse.number) has \(verse.words.count) interlinear words")
+                    if verse.words.isEmpty {
+                        debugLog("interaction", "⚠️ WARNING: No interlinear data for verse \(verse.number) - data may not be seeded!")
+                    } else {
+                        debugLog("interaction", "✨ Interlinear words available:")
+                        for word in verse.words.prefix(3) {
+                            debugLog("interaction", "  - \(word.originalText) (\(word.transliteration)) @ pos \(word.startPosition)-\(word.endPosition)")
+                        }
+                    }
+                    
                     return verse
                 }
                 
-                currentPosition += totalLength
+                currentPosition += totalVerseLength
             }
             
             return nil
         }
         
-        private func calculateVerseRelativeRange(_ range: NSRange, for verse: Verse, in textView: UITextView) -> NSRange? {
-            //let text = textView.attributedText.string
+        /// Calculate the offset within the verse text (excluding verse number)
+        private func calculateVerseOffset(for verse: Verse, selectedRange: NSRange, in textView: UITextView) -> Int {
             var currentPosition = 0
             
             for v in verses {
-                let verseNumberLength = "\(v.number) ".count
-                
                 if v.id == verse.id {
-                    // Adjust range to be relative to verse text (skip verse number)
-                    let verseStart = currentPosition + verseNumberLength
-                    let relativeStart = range.location - verseStart
+                    // Found our verse - calculate offset
+                    let verseNumberLength = "\(v.number) ".count
+                    let offsetWithinVerse = selectedRange.location - currentPosition - verseNumberLength
                     
-                    // Ensure range is within verse bounds
-                    guard relativeStart >= 0, relativeStart + range.length <= verse.text.count else {
-                        return nil
-                    }
+                    debugLog("interaction", "🧮 Offset calculation: currentPos=\(currentPosition), verseNumLen=\(verseNumberLength), selection=\(selectedRange.location), offset=\(offsetWithinVerse)")
                     
-                    return NSRange(location: relativeStart, length: range.length)
+                    return max(0, offsetWithinVerse)
                 }
                 
-                currentPosition += verseNumberLength + v.text.count + 1
+                let verseNumberLength = "\(v.number) ".count
+                let verseTextLength = v.text.count
+                currentPosition += verseNumberLength + verseTextLength + 1
             }
             
-            return nil
+            return 0
         }
     }
 }
