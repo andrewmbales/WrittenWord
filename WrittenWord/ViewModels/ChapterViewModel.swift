@@ -416,6 +416,13 @@ class ChapterViewModel {
             set: { self.showInterlinearLookup = $0 }
         )
     }
+    
+    func bindingForShowingBookmarkSheet() -> Binding<Bool> {
+        Binding(
+            get: { self.showingBookmarkSheet },
+            set: { self.showingBookmarkSheet = $0 }
+        )
+    }
 
     // MARK: - Private Methods
 

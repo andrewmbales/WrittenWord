@@ -2,7 +2,7 @@
 //  SettingsView.swift
 //  WrittenWord
 //
-//  Updated to use shared UITypes
+//  Updated to use shared UITypes with font size and line spacing sliders
 //
 
 import SwiftUI
@@ -17,6 +17,21 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Reading") {
+                // Font Size Slider
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Font Size")
+                        Spacer()
+                        Text(String(format: "%.0f pt", fontSize))
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: $fontSize, in: 12...32, step: 1)
+                        .onChange(of: fontSize) { oldValue, newValue in
+                            debugLog("settings", "⚙️ Font size changed: \(oldValue) → \(newValue)")
+                        }
+                }
+                
+                // Line Spacing Slider
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Line Spacing")
@@ -26,21 +41,8 @@ struct SettingsView: View {
                     }
                     Slider(value: $lineSpacing, in: 2...36, step: 2)
                         .onChange(of: lineSpacing) { oldValue, newValue in
-                            print("⚙️ SettingsView: Line spacing changed")
-                            print("   Old value: \(oldValue)")
-                            print("   New value: \(newValue)")
-                            print("   @AppStorage updated to: \(lineSpacing)")
+                            debugLog("settings", "⚙️ Line spacing changed: \(oldValue) → \(newValue)")
                         }
-                }
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Line Spacing")
-                        Spacer()
-                        Text(String(format: "%.0f", lineSpacing))  // Better formatting
-                            .foregroundStyle(.secondary)
-                    }
-                    Slider(value: $lineSpacing, in: 2...36, step: 2)
                 }
                 
                 Picker("Font Family", selection: $fontFamily) {

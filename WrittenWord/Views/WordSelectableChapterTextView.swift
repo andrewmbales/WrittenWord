@@ -1,8 +1,8 @@
 //
-//  WordSelectableChapterTextView.swift - DIAGNOSTIC VERSION
+//  WordSelectableChapterTextView.swift
 //  WrittenWord
 //
-//  Adding comprehensive diagnostics to see what UITextView is actually rendering
+//  UITextView wrapper with word selection, highlighting, and proper line spacing
 //
 
 import SwiftUI
@@ -14,31 +14,29 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
     let highlights: [Highlight]
     let fontSize: Double
     let fontFamily: FontFamily
-    let lineSpacing: Double  // ← This needs to trigger updates
+    let lineSpacing: Double
     let colorTheme: ColorTheme
     let onTextSelected: (Verse, NSRange, String) -> Void
         
-    // ✅ ADD: Explicit update trigger
+    // Explicit update trigger
     var updateTrigger: String {
         "\(fontSize)-\(lineSpacing)-\(fontFamily.rawValue)-\(colorTheme.rawValue)"
     }
         
     func makeUIView(context: Context) -> UITextView {
-        print("📱 WordSelectableChapterTextView.makeUIView() called")
-        print("   Initial lineSpacing: \(lineSpacing)")
-        print("   Initial fontSize: \(fontSize)")
+        debugLog("rendering", "📱 Creating UITextView with lineSpacing=\(lineSpacing), fontSize=\(fontSize)")
         
         let textView = UITextView()
         textView.delegate = context.coordinator
         textView.isEditable = false
-        textView.isScrollEnabled = false  // CRITICAL - let parent ScrollView handle scrolling
+        textView.isScrollEnabled = false  // Let parent ScrollView handle scrolling
         textView.backgroundColor = .clear
         
         // Proper insets for readability
         textView.textContainerInset = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
         textView.textContainer.lineFragmentPadding = 0
         
-        // Enable proper text wrapping - CRITICAL for multi-line display
+        // Enable proper text wrapping
         textView.textContainer.lineBreakMode = .byWordWrapping
         textView.textContainer.maximumNumberOfLines = 0
         textView.textContainer.widthTracksTextView = true
@@ -50,7 +48,7 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
         // Customize selection appearance
         textView.tintColor = UIColor.systemBlue
 
-        // CRITICAL: Set content hugging and compression resistance for proper wrapping
+        // Set content priorities for proper wrapping
         textView.setContentHuggingPriority(.defaultLow, for: .horizontal)
         textView.setContentHuggingPriority(.required, for: .vertical)
         textView.setContentCompressionResistancePriority(.required, for: .vertical)
@@ -63,86 +61,18 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
     }
     
     func updateUIView(_ textView: UITextView, context: Context) {
-        print("🔄 WordSelectableChapterTextView.updateUIView() called")
-        print("   Current lineSpacing: \(lineSpacing)")
-        print("   Current fontSize: \(fontSize)")
-        print("   Verses count: \(verses.count)")
+        debugLog("rendering", "🔄 Updating UITextView: lineSpacing=\(lineSpacing), verses=\(verses.count)")
         
         // Update coordinator with current verses
         context.coordinator.verses = verses
         
-        // Build attributed text
+        // Build and set attributed text
         let attributedText = buildAttributedText()
+        textView.attributedText = attributedText
         
-        // ✅ NUCLEAR FIX: Directly modify textStorage instead of attributedText
-        textView.textStorage.setAttributedString(attributedText)
-        
-        // ✅ Force layout manager to invalidate ALL cached measurements
-        let fullRange = NSRange(location: 0, length: textView.textStorage.length)
-        textView.layoutManager.invalidateLayout(forCharacterRange: fullRange, actualCharacterRange: nil)
-        textView.layoutManager.invalidateDisplay(forCharacterRange: fullRange)
-        
-        // Update text container configuration
-        textView.textContainer.lineBreakMode = .byWordWrapping
-        textView.textContainer.maximumNumberOfLines = 0
-        textView.textContainer.widthTracksTextView = true
-        
-        // Update insets
-        let verticalInset = fontSize * 0.25
-        textView.textContainerInset = UIEdgeInsets(
-            top: verticalInset,
-            left: 20,
-            bottom: verticalInset,
-            right: 20
-        )
-        textView.textContainer.lineFragmentPadding = 0
-        
-        // Force synchronous layout calculation
-        textView.layoutManager.ensureLayout(for: textView.textContainer)
-        
-        // Force complete relayout
-        textView.invalidateIntrinsicContentSize()
+        // Force layout update
         textView.setNeedsLayout()
         textView.layoutIfNeeded()
-        
-        // 🔍 DIAGNOSTIC: What is UITextView ACTUALLY rendering?
-        print("   🔍 DIAGNOSTIC - Inspecting actual rendered attributes:")
-        if attributedText.length > 0 {
-            var effectiveRange = NSRange()
-            if let paragraphStyle = attributedText.attribute(.paragraphStyle, at: 0, effectiveRange: &effectiveRange) as? NSParagraphStyle {
-                print("      ✓ Stored paragraph style:")
-                print("        - lineSpacing: \(paragraphStyle.lineSpacing)")
-                print("        - minimumLineHeight: \(paragraphStyle.minimumLineHeight)")
-                print("        - maximumLineHeight: \(paragraphStyle.maximumLineHeight)")
-                print("        - lineBreakMode: \(paragraphStyle.lineBreakMode.rawValue)")
-            }
-            
-            // Check what the textView's textStorage has
-            if textView.textStorage.length > 0 {
-                if let storedStyle = textView.textStorage.attribute(.paragraphStyle, at: 0, effectiveRange: &effectiveRange) as? NSParagraphStyle {
-                    print("      ✓ TextStorage paragraph style:")
-                    print("        - lineSpacing: \(storedStyle.lineSpacing)")
-                    print("        - minimumLineHeight: \(storedStyle.minimumLineHeight)")
-                    print("        - maximumLineHeight: \(storedStyle.maximumLineHeight)")
-                }
-            }
-            
-            // Check layout manager's actual line heights
-            let glyphRange = textView.layoutManager.glyphRange(for: textView.textContainer)
-            if glyphRange.length > 0 {
-                var lineNumber = 0
-                textView.layoutManager.enumerateLineFragments(forGlyphRange: NSRange(location: 0, length: min(100, glyphRange.length))) { rect, usedRect, textContainer, glyphRange, stop in
-                    if lineNumber < 3 {
-                        print("      ✓ Line \(lineNumber) actual rendering:")
-                        print("        - rect height: \(rect.height)")
-                        print("        - usedRect height: \(usedRect.height)")
-                        lineNumber += 1
-                    }
-                }
-            }
-        }
-        
-        print("   ✅ updateUIView completed")
     }
     
     func makeCoordinator() -> Coordinator {
@@ -150,8 +80,7 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
     }
     
     private func buildAttributedText() -> NSAttributedString {
-        print("📝 buildAttributedText() called")
-        print("   Using lineSpacing: \(lineSpacing)")
+        debugLog("rendering", "📝 Building attributed text with lineSpacing=\(lineSpacing)")
         
         let result = NSMutableAttributedString()
         
@@ -166,34 +95,24 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
             
             result.append(verseNumber)
             
-            // Verse text
+            // Verse text with paragraph style
             let verseText = NSMutableAttributedString(string: verse.text)
             
-            /// ✅ THE REAL FIX: lineSpacing only works BETWEEN lines, not for single-line text!
-            /// Use lineHeightMultiple to control the actual line height
+            // Configure paragraph style for line spacing
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.lineBreakMode = .byWordWrapping
             paragraphStyle.alignment = .natural
             
-            // Convert our lineSpacing slider value (2-36) to a line height multiplier
-            // Base font size is 24.0, so we calculate the multiplier
-            // lineSpacing 6 = tight (1.25x), 20 = comfortable (1.8x), 36 = loose (2.5x)
-            
+            // Convert lineSpacing slider value (2-36) to line height multiplier
             let desiredTotalLineHeight = fontSize + lineSpacing
             let lineHeightMultiplier = desiredTotalLineHeight / fontSize
             
             paragraphStyle.lineHeightMultiple = lineHeightMultiplier
-            
-            // Also set minimum/maximum to enforce it
             paragraphStyle.minimumLineHeight = desiredTotalLineHeight
             paragraphStyle.maximumLineHeight = desiredTotalLineHeight
             
             if index == 0 {
-                print("   📐 Paragraph style for verse 1:")
-                print("      lineSpacing: \(paragraphStyle.lineSpacing)")
-                print("      minimumLineHeight: \(paragraphStyle.minimumLineHeight)")
-                print("      maximumLineHeight: \(paragraphStyle.maximumLineHeight)")
-                print("      fontSize: \(fontSize)")
+                debugLog("rendering", "📐 First verse paragraph style: min/max=\(desiredTotalLineHeight), multiplier=\(lineHeightMultiplier)")
             }
             
             // Font selection
@@ -214,7 +133,7 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
             verseText.addAttributes([
                 .font: font,
                 .paragraphStyle: paragraphStyle,
-                .foregroundColor: colorTheme.textColor.uiColor
+                .foregroundColor: UIColor(colorTheme.textColor)  // ✅ Wrap in UIColor()
             ], range: NSRange(location: 0, length: verseText.length))
             
             // Apply highlights for this verse
@@ -229,7 +148,7 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
                    highlightRange.location + highlightRange.length <= verseText.length {
                     verseText.addAttribute(
                         .backgroundColor,
-                        value: UIColor(highlight.highlightColor),
+                        value: UIColor(highlight.highlightColor),  // ✅ Also wrap this
                         range: highlightRange
                     )
                 }
@@ -237,13 +156,12 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
             
             result.append(verseText)
             
-            // Add proper spacing between verses
+            // Add spacing between verses
             if index < verses.count - 1 {
                 result.append(NSAttributedString(string: "\n"))
             }
         }
         
-        print("   ✅ buildAttributedText completed")
         return result
     }
     
@@ -266,84 +184,79 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
                 return
             }
             
-            // Find which verse this selection belongs to
-            if let verse = findVerse(at: selectedRange.location, in: textView.attributedText) {
-                // Convert absolute position to verse-relative position
-                let verseRange = findVerseRange(verse: verse, in: textView.attributedText)
-                let relativeRange = NSRange(
-                    location: selectedRange.location - verseRange.location,
-                    length: selectedRange.length
-                )
+            debugLog("interaction", "📌 Text selected: range=\(selectedRange), length=\(selectedRange.length)")
+            
+            // Cancel previous debounce
+            selectionDebounceTask?.cancel()
+            
+            // Debounce selection to avoid excessive callbacks
+            selectionDebounceTask = Task { @MainActor [weak self] in
+                guard let self = self else { return }
                 
-                // Debounce to allow multi-word selection
-                selectionDebounceTask?.cancel()
-                selectionDebounceTask = Task { @MainActor in
-                    do {
-                        try await Task.sleep(nanoseconds: 300_000_000) // 300ms
-                        if !Task.isCancelled {
-                            parent.onTextSelected(verse, relativeRange, selectedText)
-                        }
-                    } catch {
-                        // Task cancelled
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+                
+                // Find which verse this selection belongs to
+                if let verse = self.findVerseForRange(selectedRange, in: textView) {
+                    debugLog("interaction", "📍 Selection in verse \(verse.number)")
+                    
+                    // Calculate verse-relative range
+                    if let relativeRange = self.calculateVerseRelativeRange(
+                        selectedRange,
+                        for: verse,
+                        in: textView
+                    ) {
+                        self.parent.onTextSelected(verse, relativeRange, selectedText)
                     }
                 }
             }
         }
         
-        private func findVerse(at position: Int, in attributedText: NSAttributedString) -> Verse? {
-            var currentPos = 0
+        private func findVerseForRange(_ range: NSRange, in textView: UITextView) -> Verse? {
+            //let text = textView.attributedText.string
+            var currentPosition = 0
             
             for verse in verses {
                 let verseNumberLength = "\(verse.number) ".count
                 let verseTextLength = verse.text.count
-                let totalLength = verseNumberLength + verseTextLength + 1  // +1 for newline
+                let totalLength = verseNumberLength + verseTextLength + 1 // +1 for newline
                 
-                if position >= currentPos && position < currentPos + totalLength {
+                let verseRange = NSRange(location: currentPosition, length: totalLength)
+                
+                if NSIntersectionRange(range, verseRange).length > 0 {
                     return verse
                 }
                 
-                currentPos += totalLength
+                currentPosition += totalLength
             }
             
-            return verses.last
+            return nil
         }
         
-        private func findVerseRange(verse: Verse, in attributedText: NSAttributedString) -> NSRange {
-            var currentPos = 0
+        private func calculateVerseRelativeRange(_ range: NSRange, for verse: Verse, in textView: UITextView) -> NSRange? {
+            //let text = textView.attributedText.string
+            var currentPosition = 0
             
             for v in verses {
                 let verseNumberLength = "\(v.number) ".count
                 
                 if v.id == verse.id {
-                    return NSRange(
-                        location: currentPos + verseNumberLength,
-                        length: v.text.count
-                    )
+                    // Adjust range to be relative to verse text (skip verse number)
+                    let verseStart = currentPosition + verseNumberLength
+                    let relativeStart = range.location - verseStart
+                    
+                    // Ensure range is within verse bounds
+                    guard relativeStart >= 0, relativeStart + range.length <= verse.text.count else {
+                        return nil
+                    }
+                    
+                    return NSRange(location: relativeStart, length: range.length)
                 }
                 
-                let verseTextLength = v.text.count
-                currentPos += verseNumberLength + verseTextLength + 1  // +1 for newline
+                currentPosition += verseNumberLength + v.text.count + 1
             }
             
-            return NSRange(location: 0, length: 0)
+            return nil
         }
     }
 }
-
-// MARK: - Helper Extensions
-
-extension UIFont {
-    func withTraits(_ traits: UIFontDescriptor.SymbolicTraits, size: CGFloat, design: UIFontDescriptor.SystemDesign) -> UIFont {
-        guard let descriptor = fontDescriptor.withDesign(design)?.withSymbolicTraits(traits) else {
-            return self
-        }
-        return UIFont(descriptor: descriptor, size: size)
-    }
-}
-
-extension Color {
-    var uiColor: UIColor {
-        UIColor(self)
-    }
-}
-

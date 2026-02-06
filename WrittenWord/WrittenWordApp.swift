@@ -1,8 +1,8 @@
 //
-//  WrittenWordApp.swift - FIXED
+//  WrittenWordApp.swift
 //  WrittenWord
 //
-//  Proper seed-once logic - only seeds on first launch
+//  Proper seed-once logic with debug prints gated
 //
 
 import SwiftUI
@@ -58,23 +58,23 @@ func seedDataIfNeeded(container: ModelContainer) async {
         let fetch = FetchDescriptor<Book>(predicate: nil)
         let existing = try modelContext.fetch(fetch)
         
-        print("📚 Database check - Books count: \(existing.count), Seed flag: \(didSeedData)")
+        debugLog("data", "📚 Database check - Books: \(existing.count), Seed flag: \(didSeedData)")
         
         // If we have books AND the flag is set, we're done
         if !existing.isEmpty && didSeedData {
-            print("✅ Database already seeded, skipping")
+            debugLog("data", "✅ Database already seeded, skipping")
             return
         }
         
         // If flag says seeded but no books exist, reset flag
         if existing.isEmpty && didSeedData {
-            print("🔄 Resetting seed flag - no books found but flag was true")
+            debugLog("data", "🔄 Resetting seed flag - no books found")
             didSeedData = false
         }
         
         // If books exist but flag not set, just set the flag (recovered state)
         if !existing.isEmpty && !didSeedData {
-            print("🔄 Books exist but flag not set - setting flag")
+            debugLog("data", "🔄 Books exist but flag not set - setting flag")
             didSeedData = true
             return
         }
@@ -84,45 +84,20 @@ func seedDataIfNeeded(container: ModelContainer) async {
             return
         }
         
-        print("🌱 Starting fresh database seed...")
+        debugLog("data", "🌱 Starting fresh database seed...")
         
         // Load and decode Bible JSON
-        print("📖 Loading bundled JSON...")
+        debugLog("data", "📖 Loading bundled JSON...")
         let data = try loadBundledJSON(named: "kjv", withExtension: "json")
         
-        // 🔍 DEBUG: Print first 500 characters of JSON
-        if let jsonString = String(data: data, encoding: .utf8) {
-            print("📄 JSON Preview (first 500 chars):")
-            print(String(jsonString.prefix(500)))
-            print("...")
-        }
-        
-        // 🔍 DEBUG: Try parsing as generic JSON first
-        if let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-            print("✅ JSON is an array of \(jsonObject.count) books")
-            
-            if let firstBook = jsonObject.first {
-                print("📖 First book keys: \(firstBook.keys)")
-                
-                if let chapters = firstBook["chapters"] {
-                    print("📑 Chapters type: \(type(of: chapters))")
-                    
-                    // Check if it's an array or dictionary
-                    if let chaptersArray = chapters as? [[String: Any]] {
-                        print("✅ Chapters is an array with \(chaptersArray.count) items")
-                        if let firstChapter = chaptersArray.first {
-                            print("📄 First chapter keys: \(firstChapter.keys)")
-                        }
-                    } else if let chaptersDict = chapters as? [String: Any] {
-                        print("✅ Chapters is a dictionary with keys: \(chaptersDict.keys)")
-                    }
-                }
+        if DebugConfig.Categories.dataLoading {
+            if let jsonString = String(data: data, encoding: .utf8) {
+                debugLog("data", "📄 JSON Preview (first 500 chars): \(String(jsonString.prefix(500)))...")
             }
         }
         
-        // Now try actual decoding
         let decoded = try JSONDecoder().decode([DecodableBook].self, from: data)
-        print("✅ Decoded \(decoded.count) books")
+        debugLog("data", "✅ Decoded \(decoded.count) books")
 
         // Define the canonical order of books
         let otBooks = [
@@ -147,7 +122,7 @@ func seedDataIfNeeded(container: ModelContainer) async {
 
         // Seed all books
         for (index, b) in decoded.enumerated() {
-            print("📝 Seeding book \(index + 1)/\(decoded.count): \(b.name)")
+            debugLog("data", "📝 Seeding book \(index + 1)/\(decoded.count): \(b.name)")
             
             // Determine testament
             let test: String
@@ -187,25 +162,22 @@ func seedDataIfNeeded(container: ModelContainer) async {
             }
         }
         
-        print("💾 Saving to database...")
+        debugLog("data", "💾 Saving to database...")
         try modelContext.save()
-        print("✅ Bible text seeding complete!")
+        debugLog("data", "✅ Bible text seeding complete!")
 
-        // ========================================
-        // STEP 2: NOW seed interlinear data
-        // (verses must exist first!)
-        // ========================================
-        print("🔤 Seeding interlinear data from JSON...")
+        // Seed interlinear data
+        debugLog("data", "🔤 Seeding interlinear data from JSON...")
         try await seedInterlinearData(modelContext: modelContext)
-        print("✅ Interlinear data seeded!")
+        debugLog("data", "✅ Interlinear data seeded!")
         
         // Mark as complete
         didSeedData = true
         
         // Verify
         let savedBooks = try modelContext.fetch(FetchDescriptor<Book>())
-        print("📊 Final check - Total books in database: \(savedBooks.count)")
-        print("🎉 Database initialization complete!")
+        debugLog("data", "📊 Final check - Total books: \(savedBooks.count)")
+        debugLog("data", "🎉 Database initialization complete!")
         
     } catch {
         print("❌ Seeding failed: \(error)")
@@ -216,7 +188,7 @@ func seedDataIfNeeded(container: ModelContainer) async {
 
 func loadBundledJSON(named name: String, withExtension ext: String) throws -> Data {
     guard let url = Bundle.main.url(forResource: name, withExtension: ext) else {
-        print("❌ Failed to find \(name).\(ext) in bundle")
+        debugLog("data", "❌ Failed to find \(name).\(ext) in bundle")
         throw NSError(domain: "Seed", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing bundled JSON \(name).\(ext)"])
     }
     return try Data(contentsOf: url)
@@ -244,7 +216,6 @@ struct DecodableBook: Decodable {
         testament = try? container.decode(String.self, forKey: .testament)
         
         // Decode chapters as array of string arrays
-        // Format: "chapters": [["verse1", "verse2", ...], ["verse1", "verse2", ...]]
         let versesArrays = try container.decode([[String]].self, forKey: .chapters)
         
         chapters = versesArrays.enumerated().map { chapterIndex, verses in
@@ -259,37 +230,9 @@ struct DecodableBook: Decodable {
 struct DecodableChapter: Decodable {
     let number: Int
     let verses: [DecodableVerse]
-    
-    // No custom decoder needed - initialized from DecodableBook
 }
 
 struct DecodableVerse: Decodable {
     let number: Int
     let text: String
-    
-    // No custom decoder needed - initialized from DecodableBook
-}
-
-// LaunchLoadingView (for initial interlinear seed)
-struct LaunchLoadingView: View {
-    @State private var progress: Double = 0
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            ProgressView(value: progress, total: 1.0) {
-                Text("Loading Bible Data...")
-                    .font(.headline)
-            }
-            .progressViewStyle(.linear)
-            .frame(width: 300)
-            
-            Text("First launch - this will only happen once")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .task {
-            // Update progress as seeding happens
-            // You'd need to modify seedInterlinearData to report progress
-        }
-    }
 }

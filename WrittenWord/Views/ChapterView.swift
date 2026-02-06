@@ -20,7 +20,7 @@ struct ChapterView: View {
     @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
     @AppStorage("fontFamily") private var fontFamily: FontFamily = .system
 
-    // ✅ ADD: Force recreation counter
+    // Force recreation counter for settings changes
     @State private var textViewRecreationID = UUID()
     
     let onChapterChange: (Chapter) -> Void
@@ -43,21 +43,26 @@ struct ChapterView: View {
         .task(id: chapter.id) {
             // Better lifecycle management - recreates viewModel when chapter changes
             if viewModel == nil || viewModel?.chapter.id != chapter.id {
+                debugLog("lifecycle", "🔄 ChapterView: Creating/updating viewModel for chapter \(chapter.number)")
                 viewModel = ChapterViewModel(chapter: chapter, modelContext: modelContext)
                 await viewModel?.loadChapterNote()
             }
         }
-        // ✅ ADD: Watch for setting changes and force recreation
-        .onChange(of: lineSpacing) { _, _ in
+        // Watch for setting changes and force recreation
+        .onChange(of: lineSpacing) { _, newValue in
+            debugLog("settings", "📏 ChapterView: Line spacing changed to \(newValue), recreating text view")
             textViewRecreationID = UUID()
         }
-        .onChange(of: fontSize) { _, _ in
+        .onChange(of: fontSize) { _, newValue in
+            debugLog("settings", "🔤 ChapterView: Font size changed to \(newValue), recreating text view")
             textViewRecreationID = UUID()
         }
-        .onChange(of: fontFamily) { _, _ in
+        .onChange(of: fontFamily) { _, newValue in
+            debugLog("settings", "🖋️ ChapterView: Font family changed to \(newValue.rawValue), recreating text view")
             textViewRecreationID = UUID()
         }
-        .onChange(of: colorTheme) { _, _ in
+        .onChange(of: colorTheme) { _, newValue in
+            debugLog("settings", "🎨 ChapterView: Color theme changed to \(newValue.rawValue), recreating text view")
             textViewRecreationID = UUID()
         }
     }
@@ -79,7 +84,7 @@ struct ChapterView: View {
                     Divider()
                 }
                 
-                // Highlight palette (shown when text selected without interlinear data)
+                // Highlight palette (shown when text selected)
                 if vm.showHighlightMenu {
                     HighlightPalette(
                         selectedColor: vm.bindingForSelectedHighlightColor(),
@@ -94,63 +99,42 @@ struct ChapterView: View {
                     Divider()
                 }
                 
-                // Main chapter content with annotation overlay
+                // Chapter content with overlay
                 chapterContent(vm)
             }
         }
         .navigationTitle("\(vm.chapter.book?.name ?? "") \(vm.chapter.number)")
-        .searchable(text: vm.bindingForSearchText(), prompt: "Search this chapter...")
-        .toolbar { toolbarContent(vm) }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            toolbarContent(vm)
+        }
         .sheet(isPresented: vm.bindingForShowingDrawing()) {
-            NavigationStack {
-                if let verse = vm.selectedVerse {
-                    FullPageDrawingView(verse: verse)
-                } else {
-                    FullPageDrawingView(chapter: vm.chapter)
-                }
+            FullPageDrawingView(note: vm.chapterNote)
+        }
+        
+        // Commenting out the below references until I can build them out more comprehensively
+       /* .sheet(isPresented: vm.bindingForShowingBookmarkSheet()) {
+            if let verse = vm.verseToBookmark {
+                BookmarkDetailView(verse: verse)
             }
-        }
-        .sheet(isPresented: vm.bindingForShowingColorPicker()) {
-            ColorPickerSheet(selectedColor: vm.bindingForSelectedColor())
-        }
-        .sheet(item: vm.bindingForVerseToBookmark()) { verse in
-            AddBookmarkSheet(verse: verse)
         }
         .sheet(isPresented: vm.bindingForShowInterlinearLookup()) {
             if let word = vm.selectedWord {
-                InterlinearLookupView(word: word)
+                InterlinearWordDetailView(word: word)
             }
+        }*/
+        .sheet(isPresented: vm.bindingForShowingColorPicker()) {
+            ColorPickerSheet(selectedColor: vm.bindingForSelectedColor())
         }
-        .onChange(of: vm.showAnnotations) { _, newValue in
-            if !newValue {
-                Task {
-                    await vm.saveAnnotations()
-                }
-            }
-        }
-        .onChange(of: vm.showInterlinearLookup) { _, newValue in
-            // Reset state when interlinear lookup is dismissed
-            if !newValue {
-                vm.selectedWord = nil
-                vm.selectedRange = nil
-                vm.selectedText = ""
-            }
-        }
+        .searchable(text: vm.bindingForSearchText(), prompt: "Search verses")
     }
     
-    // MARK: - Chapter Content
     @ViewBuilder
     private func chapterContent(_ vm: ChapterViewModel) -> some View {
         ZStack {
             ScrollViewReader { proxy in
                 ScrollView {
-                    // ✅ DEBUG: Print current values
-                    let _ = print("🔧 ChapterView Building Text View:")
-                    let _ = print("   fontSize: \(fontSize)")
-                    let _ = print("   lineSpacing: \(lineSpacing)")
-                    let _ = print("   fontFamily: \(fontFamily.rawValue)")
-                    let _ = print("   colorTheme: \(colorTheme.rawValue)")
-                    let _ = print("   ID: \(fontSize)-\(lineSpacing)-\(fontFamily.rawValue)-\(colorTheme.rawValue)")
+                    let _ = debugLog("rendering", "🔧 Building text view with settings: fontSize=\(fontSize), lineSpacing=\(lineSpacing), font=\(fontFamily.rawValue), theme=\(colorTheme.rawValue)")
                     
                     WordSelectableChapterTextView(
                         verses: vm.filteredVerses,
@@ -165,13 +149,25 @@ struct ChapterView: View {
                             vm.selectTextForHighlight(verse: verse, range: range, text: text)
                         }
                     )
-                    .id(textViewRecreationID)  // ✅ Use UUID that changes on settings change
+                    .id(textViewRecreationID)
                     .padding(.vertical)
                     
                     if let nextChapter = vm.nextChapter, vm.searchText.isEmpty {
-                        ChapterContinueButton(chapter: nextChapter) {
+                        Button {
                             onChapterChange(nextChapter)
+                        } label: {
+                            HStack {
+                                Text("Continue to \(nextChapter.book?.name ?? "") \(nextChapter.number)")
+                                    .font(.headline)
+                                Image(systemName: "arrow.right.circle.fill")
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.accentColor.opacity(0.1))
+                            .cornerRadius(12)
                         }
+                        .padding(.horizontal)
+                        .padding(.top, 20)
                     }
                 }
                 .allowsHitTesting(vm.selectedTool == .none)
@@ -243,18 +239,8 @@ struct ChapterView: View {
                     } label: {
                         Label(
                             viewModel.showAnnotations ? "Hide Annotations" : "Show Annotations",
-                            systemImage: viewModel.showAnnotations ? "pencil.slash" : "pencil"
+                            systemImage: viewModel.showAnnotations ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle"
                         )
-                    }
-                    
-                    if viewModel.showAnnotations {
-                        Button(role: .destructive) {
-                            Task {
-                                await viewModel.clearAnnotations()
-                            }
-                        } label: {
-                            Label("Clear Annotations", systemImage: "trash")
-                        }
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -271,124 +257,4 @@ struct ChapterView: View {
             }
         }
     }
-}
-
-// MARK: - Verse Row Component
-struct VerseRow: View {
-    let verse: Verse
-    let highlights: [Highlight]  // Now passed from parent instead of querying
-    let fontSize: Double
-    let lineSpacing: Double
-    let fontFamily: FontFamily
-    let colorTheme: ColorTheme
-    let onTextSelected: (NSRange, String) -> Void
-    let onBookmark: () -> Void
-    
-    @State private var selectedText = ""
-    @State private var selectedRange: NSRange?
-    @State private var showHighlightMenu = false
-    
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            // Verse number
-            VStack(spacing: 4) {
-                Text("\(verse.number)")
-                    .font(.system(size: fontSize * 0.75, design: .rounded))
-                    .fontWeight(.medium)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 32, height: 32)
-                    .background(Color.accentColor.opacity(0.1))
-                    .clipShape(Circle())
-                
-                if !highlights.isEmpty {
-                    Circle()
-                        .fill(Color.accentColor)
-                        .frame(width: 6, height: 6)
-                }
-            }
-            .frame(width: 40)
-            
-            // Verse text with proper line spacing
-            SelectableTextView(
-                text: verse.text,
-                highlights: highlights,
-                fontSize: fontSize,
-                fontFamily: fontFamily,
-                lineSpacing: lineSpacing,
-                selectedRange: $selectedRange,
-                onHighlight: { range, text in
-                    onTextSelected(range, text)
-                }
-            )
-            .foregroundColor(colorTheme.textColor)
-        }
-        .contextMenu {
-            Button(action: onBookmark) {
-                Label("Bookmark", systemImage: "bookmark")
-            }
-            
-            Button {
-                UIPasteboard.general.string = verse.text
-            } label: {
-                Label("Copy", systemImage: "doc.on.doc")
-            }
-        }
-    }
-}
-
-// MARK: - Next Chapter Button
-struct ChapterContinueButton: View {
-    let chapter: Chapter
-    let onTap: () -> Void
-    
-    var body: some View {
-        VStack {
-            Divider()
-            Button(action: onTap) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Continue Reading")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text("\(chapter.book?.name ?? "") \(chapter.number)")
-                            .font(.headline)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(.secondary)
-                }
-                .padding()
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(12)
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-        }
-    }
-}
-
-// MARK: - Preview
-#Preview {
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(
-        for: Book.self,
-        Chapter.self,
-        Verse.self,
-        configurations: config
-    )
-    
-    let context = container.mainContext
-    let book = Book(name: "Genesis", order: 1, testament: "Old")
-    let chapter = Chapter(number: 1, book: book)
-    let verse = Verse(number: 1, text: "In the beginning God created the heaven and the earth.", chapter: chapter)
-    
-    context.insert(book)
-    context.insert(chapter)
-    context.insert(verse)
-    
-    return NavigationStack {
-        ChapterView(chapter: chapter) { _ in }
-    }
-    .modelContainer(container)
 }
