@@ -108,7 +108,6 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
         // 🔍 DIAGNOSTIC: What is UITextView ACTUALLY rendering?
         print("   🔍 DIAGNOSTIC - Inspecting actual rendered attributes:")
         if attributedText.length > 0 {
-            let range = NSRange(location: 0, length: min(100, attributedText.length))
             var effectiveRange = NSRange()
             if let paragraphStyle = attributedText.attribute(.paragraphStyle, at: 0, effectiveRange: &effectiveRange) as? NSParagraphStyle {
                 print("      ✓ Stored paragraph style:")
@@ -179,7 +178,7 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
             // Convert our lineSpacing slider value (2-36) to a line height multiplier
             // Base font size is 24.0, so we calculate the multiplier
             // lineSpacing 6 = tight (1.25x), 20 = comfortable (1.8x), 36 = loose (2.5x)
-            let baseLineHeight = fontSize * 1.2  // Default iOS line height
+            
             let desiredTotalLineHeight = fontSize + lineSpacing
             let lineHeightMultiplier = desiredTotalLineHeight / fontSize
             
@@ -347,3 +346,4 @@ extension Color {
         UIColor(self)
     }
 }
+

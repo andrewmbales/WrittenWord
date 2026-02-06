@@ -85,7 +85,7 @@ func seedDataIfNeeded(container: ModelContainer) async {
         }
         
         print("🌱 Starting fresh database seed...")
-                
+        
         // Load and decode Bible JSON
         print("📖 Loading bundled JSON...")
         let data = try loadBundledJSON(named: "kjv", withExtension: "json")
@@ -191,11 +191,14 @@ func seedDataIfNeeded(container: ModelContainer) async {
         try modelContext.save()
         print("✅ Bible text seeding complete!")
 
-        // Seed interlinear data
-        print("🔤 Seeding interlinear data...")
-        try await seedExpandedInterlinearData(modelContext: modelContext)
+        // ========================================
+        // STEP 2: NOW seed interlinear data
+        // (verses must exist first!)
+        // ========================================
+        print("🔤 Seeding interlinear data from JSON...")
+        try await seedInterlinearData(modelContext: modelContext)
         print("✅ Interlinear data seeded!")
-
+        
         // Mark as complete
         didSeedData = true
         
@@ -219,32 +222,7 @@ func loadBundledJSON(named name: String, withExtension ext: String) throws -> Da
     return try Data(contentsOf: url)
 }
 
-// MARK: - Seed Expanded Interlinear Data
-/*
-@MainActor
-func seedExpandedInterlinearData(modelContext: ModelContext) async throws {
-    print("📖 Seeding expanded interlinear data...")
-    
-    // Seed John 1 interlinear
-    try await seedJohn1Interlinear(modelContext: modelContext)
-    print("   ✅ John 1 interlinear data added")
-    
-    // Seed Genesis 1 interlinear
-    try await seedGenesis1Interlinear(modelContext: modelContext)
-    print("   ✅ Genesis 1 interlinear data added")
-    
-    // Seed Psalm 23 interlinear
-    try await seedPsalm23Interlinear(modelContext: modelContext)
-    print("   ✅ Psalm 23 interlinear data added")
-    
-    print("✅ Expanded interlinear data seeded!")
-}
-*/
-// You'll need to keep your existing seedJohn1Interlinear, seedGenesis1Interlinear,
-// and seedPsalm23Interlinear functions from your current code
-
 // MARK: - Decodable Models
-
 struct DecodableBook: Decodable {
     let name: String
     let abbrev: String
@@ -290,4 +268,28 @@ struct DecodableVerse: Decodable {
     let text: String
     
     // No custom decoder needed - initialized from DecodableBook
+}
+
+// LaunchLoadingView (for initial interlinear seed)
+struct LaunchLoadingView: View {
+    @State private var progress: Double = 0
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            ProgressView(value: progress, total: 1.0) {
+                Text("Loading Bible Data...")
+                    .font(.headline)
+            }
+            .progressViewStyle(.linear)
+            .frame(width: 300)
+            
+            Text("First launch - this will only happen once")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .task {
+            // Update progress as seeding happens
+            // You'd need to modify seedInterlinearData to report progress
+        }
+    }
 }
