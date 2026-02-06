@@ -2,47 +2,42 @@
 //  SettingsView.swift
 //  WrittenWord
 //
-//  Updated to use shared UITypes with font size and line spacing sliders
+//  Settings with verse border debug toggle
 //
 
 import SwiftUI
 
 struct SettingsView: View {
-    @AppStorage("notePosition") private var notePosition: NotePosition = .right
     @AppStorage("fontSize") private var fontSize: Double = 16.0
     @AppStorage("lineSpacing") private var lineSpacing: Double = 6.0
-    @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
     @AppStorage("fontFamily") private var fontFamily: FontFamily = .system
+    @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
+    @AppStorage("notePosition") private var notePosition: NotePosition = .right
+    
+    // NEW: Debug options
+    @AppStorage("showVerseBorders") private var showVerseBorders: Bool = false
     
     var body: some View {
         Form {
-            Section("Reading") {
-                // Font Size Slider
+            Section("Text Display") {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Font Size")
                         Spacer()
-                        Text(String(format: "%.0f pt", fontSize))
+                        Text("\(Int(fontSize))")
                             .foregroundStyle(.secondary)
                     }
-                    Slider(value: $fontSize, in: 12...32, step: 1)
-                        .onChange(of: fontSize) { oldValue, newValue in
-                            debugLog("settings", "⚙️ Font size changed: \(oldValue) → \(newValue)")
-                        }
+                    Slider(value: $fontSize, in: 12...28, step: 1)
                 }
                 
-                // Line Spacing Slider
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Line Spacing")
                         Spacer()
-                        Text(String(format: "%.0f", lineSpacing))
+                        Text("\(Int(lineSpacing))")
                             .foregroundStyle(.secondary)
                     }
                     Slider(value: $lineSpacing, in: 2...36, step: 2)
-                        .onChange(of: lineSpacing) { oldValue, newValue in
-                            debugLog("settings", "⚙️ Line spacing changed: \(oldValue) → \(newValue)")
-                        }
                 }
                 
                 Picker("Font Family", selection: $fontFamily) {
@@ -50,22 +45,17 @@ struct SettingsView: View {
                         Text(family.displayName).tag(family)
                     }
                 }
-            }
-            
-            Section("Appearance") {
-                Picker("Theme", selection: $colorTheme) {
+                .pickerStyle(.segmented)
+                
+                Picker("Color Theme", selection: $colorTheme) {
                     ForEach(ColorTheme.allCases, id: \.self) { theme in
-                        Label(theme.displayName, systemImage: theme.icon)
-                            .tag(theme)
+                        Text(theme.displayName).tag(theme)
                     }
                 }
+                .pickerStyle(.segmented)
                 
                 // Preview
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Preview")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    
+                GroupBox("Preview") {
                     Text("In the beginning God created the heaven and the earth.")
                         .font(.system(size: fontSize))
                         .lineSpacing(lineSpacing)
@@ -74,6 +64,29 @@ struct SettingsView: View {
                         .background(colorTheme.backgroundColor)
                         .foregroundColor(colorTheme.textColor)
                         .cornerRadius(8)
+                }
+            }
+            
+            Section("Debug Options") {
+                Toggle("Show Verse Borders", isOn: $showVerseBorders)
+                
+                if showVerseBorders {
+                    Text("Red borders will appear around each verse to help visualize layout and spacing.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                
+                // In SettingsView.swift, add to "Debug Options" section:
+                NavigationLink {
+                    InterlinearDataVerificationView()
+                } label: {
+                    Label("Verify Interlinear Data", systemImage: "checkmark.circle")
+                }
+                
+                NavigationLink {
+                    InterlinearDataDebugView()
+                } label: {
+                    Label("Interlinear Debug", systemImage: "ladybug")
                 }
             }
             

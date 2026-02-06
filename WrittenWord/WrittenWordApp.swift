@@ -166,10 +166,13 @@ func seedDataIfNeeded(container: ModelContainer) async {
         try modelContext.save()
         debugLog("data", "✅ Bible text seeding complete!")
 
-        // Seed interlinear data
+        // CRITICAL: Make sure this is present!
         debugLog("data", "🔤 Seeding interlinear data from JSON...")
-        try await seedInterlinearData(modelContext: modelContext)
-        debugLog("data", "✅ Interlinear data seeded!")
+        do {
+            try await seedInterlinearData(modelContext: modelContext)
+        } catch {
+            print("❌ Error seeding interlinear data: \(error)")
+        }
         
         // Mark as complete
         didSeedData = true
