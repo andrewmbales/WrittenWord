@@ -18,8 +18,9 @@ struct InlineInterlinearView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Get words sorted by index
+            // Now this works:
             let words = WordLookupService.getWords(for: verse)
-
+            
             // Display words in a wrapping layout
             FlowLayout(spacing: 16) {
                 ForEach(words, id: \.id) { word in
