@@ -18,6 +18,9 @@ struct SettingsView: View {
     @AppStorage("leftMargin") private var leftMargin: Double = 40.0
     @AppStorage("rightMargin") private var rightMargin: Double = 40.0
     
+    // Highlight palette style
+    @AppStorage("paletteStyle") private var paletteStyle: PaletteStyle = .horizontal
+
     // Debug options
     @AppStorage("showVerseBorders") private var showVerseBorders: Bool = false
     
@@ -127,6 +130,47 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             
+            // Highlighting Section
+            Section {
+                Picker("Palette Style", selection: $paletteStyle) {
+                    ForEach(PaletteStyle.allCases, id: \.self) { style in
+                        Label(style.rawValue, systemImage: style.icon).tag(style)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(paletteStyle.description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    // Live preview of selected style
+                    Group {
+                        switch paletteStyle {
+                        case .horizontal:
+                            HorizontalHighlightPalette(
+                                selectedColor: .constant(.yellow),
+                                onHighlight: { _ in },
+                                onDismiss: { }
+                            )
+                        case .popover:
+                            CompactPopoverPalette(
+                                selectedColor: .constant(.blue),
+                                onHighlight: { _ in },
+                                onDismiss: { }
+                            )
+                        }
+                    }
+                    .allowsHitTesting(false)
+                    .scaleEffect(0.85)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 4)
+                }
+            } header: {
+                Text("Highlighting")
+            } footer: {
+                Text("Choose how the highlight color picker appears when you select text.")
+            }
+
             // Debug Options Section
             Section("Debug Options") {
                 Toggle("Show Verse Borders", isOn: $showVerseBorders)

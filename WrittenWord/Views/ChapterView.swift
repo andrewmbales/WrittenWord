@@ -20,9 +20,12 @@ struct ChapterView: View {
     @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
     @AppStorage("fontFamily") private var fontFamily: FontFamily = .system
     
-    // NEW: Margin settings
+    // Margin settings
     @AppStorage("leftMargin") private var leftMargin: Double = 40.0
     @AppStorage("rightMargin") private var rightMargin: Double = 40.0
+
+    // Palette style
+    @AppStorage("paletteStyle") private var paletteStyle: PaletteStyle = .horizontal
     
     let onChapterChange: (Chapter) -> Void
     
@@ -73,9 +76,9 @@ struct ChapterView: View {
                     Divider()
                 }
                 
-                // Highlight palette
-                if viewModel.showHighlightMenu {
-                    HighlightPalette(
+                // Highlight palette (horizontal style renders inline)
+                if viewModel.showHighlightMenu && paletteStyle == .horizontal {
+                    HorizontalHighlightPalette(
                         selectedColor: $viewModel.selectedHighlightColor,
                         onHighlight: viewModel.createHighlight,
                         onDismiss: {
@@ -87,9 +90,27 @@ struct ChapterView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
                     Divider()
                 }
-                
-                // Chapter content
-                chapterContent(vm)
+
+                // Chapter content with popover overlay
+                ZStack(alignment: .top) {
+                    chapterContent(vm)
+
+                    // Highlight palette (popover style floats over content)
+                    if viewModel.showHighlightMenu && paletteStyle == .popover {
+                        CompactPopoverPalette(
+                            selectedColor: $viewModel.selectedHighlightColor,
+                            onHighlight: viewModel.createHighlight,
+                            onDismiss: {
+                                viewModel.showHighlightMenu = false
+                                viewModel.selectedRange = nil
+                                viewModel.selectedText = ""
+                            }
+                        )
+                        .padding(.top, 16)
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                        .zIndex(50)
+                    }
+                }
             }
             
             // FIXED: Bottom sheet for interlinear lookup (outside ScrollView for proper presentation)
