@@ -165,9 +165,11 @@ struct ChapterView: View {
         }
         .sheet(isPresented: vm.bindingForShowingDrawing()) {
             FullPageDrawingView(note: vm.chapterNote)
+                .preferredColorScheme(colorTheme.preferredColorScheme)
         }
         .sheet(isPresented: vm.bindingForShowingColorPicker()) {
             ColorPickerSheet(selectedColor: vm.bindingForSelectedColor())
+                .preferredColorScheme(colorTheme.preferredColorScheme)
         }
         .searchable(text: vm.bindingForSearchText(), prompt: "Search verses")
         .alert("Remove All Highlights", isPresented: Binding(
@@ -210,7 +212,7 @@ struct ChapterView: View {
                     }
 
                     if showInterlinear {
-                        // NEW: Interlinear mode
+                        // Interlinear mode — margins match regular text view
                         VStack(spacing: 0) {
                             ForEach(vm.filteredVerses, id: \.id) { verse in
                                 InterlinearVerseView(
@@ -225,9 +227,10 @@ struct ChapterView: View {
                                 )
                             }
                         }
-                        .padding(.vertical)
+                        .padding(.top, 12)
+                        .padding(.bottom, 20)
                     } else {
-                        // Existing: Regular text mode
+                        // Regular text mode
                         WordSelectableChapterTextView(
                             verses: vm.filteredVerses,
                             highlights: vm.filteredVerses.flatMap { verse in
@@ -248,7 +251,6 @@ struct ChapterView: View {
                             selectedVerseId: vm.selectedVerse?.id,
                             selectionRange: vm.selectedRange
                         )
-                        .padding(.vertical)
                     }
                     
                     // Continue to next chapter button

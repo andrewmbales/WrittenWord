@@ -24,34 +24,33 @@ struct InterlinearVerseView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(alignment: .top, spacing: 8) {
             // Verse number
-            HStack(alignment: .top, spacing: 8) {
-                Text("\(verse.number)")
-                    .font(.system(size: fontSize * 0.75, weight: .bold))
-                    .foregroundStyle(.secondary)
+            Text("\(verse.number)")
+                .font(.system(size: fontSize * 0.75, weight: .bold))
+                .foregroundStyle(.secondary)
 
-                // Interlinear content
-                if words.isEmpty {
-                    // Fallback: Show plain text if no interlinear data
-                    Text(verse.text)
-                        .font(.system(size: fontSize))
-                        .foregroundColor(colorTheme.textColor)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    // Show interlinear words
-                    InterlinearWordFlow(
-                        words: words,
-                        fontSize: fontSize,
-                        fontFamily: fontFamily,
-                        colorTheme: colorTheme,
-                        onWordTapped: onWordTapped
-                    )
-                }
+            // Interlinear content
+            if words.isEmpty {
+                // Fallback: Show plain text if no interlinear data
+                Text(verse.text)
+                    .font(.system(size: fontSize))
+                    .foregroundColor(colorTheme.textColor)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                // Show interlinear words
+                InterlinearWordFlow(
+                    words: words,
+                    fontSize: fontSize,
+                    fontFamily: fontFamily,
+                    colorTheme: colorTheme,
+                    onWordTapped: onWordTapped
+                )
             }
         }
         .padding(.vertical, 8)
-        .padding(.horizontal, max(16, leftMargin * 0.5))
+        .padding(.leading, leftMargin)
+        .padding(.trailing, rightMargin)
     }
 }
 
@@ -93,15 +92,15 @@ struct InterlinearWordBlock: View {
 
     var body: some View {
         VStack(alignment: .center, spacing: 2) {
-            // Original language text (Greek/Hebrew)
-            Text(word.originalText)
-                .font(.system(size: fontSize * 0.75, design: .serif))
-                .foregroundColor(.blue)
-
-            // English translation
+            // English translation (on top)
             Text(word.translatedText)
                 .font(.system(size: fontSize))
                 .foregroundColor(colorTheme.textColor)
+
+            // Original language text below (Greek/Hebrew)
+            Text(word.originalText)
+                .font(.system(size: fontSize * 0.75, design: .serif))
+                .foregroundColor(.blue)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4)

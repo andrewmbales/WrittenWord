@@ -188,17 +188,19 @@ struct GlobalSearchView: View {
 struct SearchResultRow: View {
     let result: SearchResult
     let searchQuery: String
-    
+
+    @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(result.reference)
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
-                
+                    .foregroundStyle(colorTheme.textColor)
+
                 Spacer()
-                
+
                 Text(result.book.testament)
                     .font(.caption2)
                     .padding(.horizontal, 6)
@@ -207,16 +209,17 @@ struct SearchResultRow: View {
                     .foregroundColor(result.book.testament == "OT" ? .purple : .blue)
                     .cornerRadius(4)
             }
-            
+
             HighlightedSearchText(
                 text: result.contextText,
                 searchQuery: searchQuery
             )
             .font(.body)
+            .foregroundStyle(colorTheme.textColor)
             .lineLimit(3)
         }
         .padding()
-        .background(Color(.systemGray6).opacity(0.5))
+        .background(colorTheme.textColor.opacity(0.06))
         .cornerRadius(8)
     }
 }
@@ -292,7 +295,7 @@ struct SearchFrequencyChart: View {
             }
         }
         .padding()
-        .background(Color(.systemGray6).opacity(0.5))
+        .background(colorTheme.textColor.opacity(0.06))
         .cornerRadius(12)
     }
 }
