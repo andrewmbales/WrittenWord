@@ -71,6 +71,9 @@ class ChapterViewModel {
     var showingBookmarkSheet = false
     var verseToBookmark: Verse?
 
+    // MARK: - Remove Highlights State
+    var showRemoveHighlightsConfirmation = false
+
     // MARK: - Performance Caches
     private var highlightsCache: [UUID: [Highlight]] = [:]
     private var versesCache: [Verse] = []
@@ -283,6 +286,34 @@ class ChapterViewModel {
         }
         
         resetSelection()
+    }
+
+    func removeAllHighlightsInChapter() {
+        let verseIds = versesCache.map { $0.id }
+
+        let descriptor = FetchDescriptor<Highlight>()
+
+        do {
+            let allHighlights = try modelContext.fetch(descriptor)
+            let chapterHighlights = allHighlights.filter { verseIds.contains($0.verseId) }
+
+            for highlight in chapterHighlights {
+                modelContext.delete(highlight)
+            }
+
+            try modelContext.save()
+            highlightsCache.removeAll()
+
+            #if DEBUG
+            print("✅ Removed \(chapterHighlights.count) highlights from chapter")
+            #endif
+        } catch {
+            print("❌ Error removing highlights: \(error.localizedDescription)")
+        }
+    }
+
+    var chapterHighlightCount: Int {
+        highlightsCache.values.reduce(0) { $0 + $1.count }
     }
 
     func bookmarkChapter() {

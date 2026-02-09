@@ -137,6 +137,17 @@ struct ChapterView: View {
             ColorPickerSheet(selectedColor: vm.bindingForSelectedColor())
         }
         .searchable(text: vm.bindingForSearchText(), prompt: "Search verses")
+        .alert("Remove All Highlights", isPresented: Binding(
+            get: { vm.showRemoveHighlightsConfirmation },
+            set: { vm.showRemoveHighlightsConfirmation = $0 }
+        )) {
+            Button("Cancel", role: .cancel) { }
+            Button("Remove All", role: .destructive) {
+                vm.removeAllHighlightsInChapter()
+            }
+        } message: {
+            Text("Are you sure you want to remove all highlights in this chapter? This cannot be undone.")
+        }
     }
     
     @ViewBuilder
@@ -145,6 +156,26 @@ struct ChapterView: View {
             // Text content (bottom layer)
             ScrollViewReader { proxy in
                 ScrollView {
+                    // Previous chapter button at top
+                    if let previousChapter = vm.previousChapter, vm.searchText.isEmpty {
+                        Button {
+                            onChapterChange(previousChapter)
+                        } label: {
+                            HStack {
+                                Image(systemName: "arrow.left")
+                                Text("Back to \(previousChapter.book?.name ?? "") \(previousChapter.number)")
+                            }
+                            .font(.headline)
+                            .foregroundColor(.blue)
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(12)
+                        }
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+                    }
+
                     if vm.showInterlinear {
                         // NEW: Interlinear mode
                         VStack(spacing: 0) {
@@ -299,7 +330,17 @@ struct ChapterView: View {
                             systemImage: vm.interlinearIcon
                         )
                     }
-                    
+
+                    if vm.chapterHighlightCount > 0 {
+                        Divider()
+
+                        Button(role: .destructive) {
+                            vm.showRemoveHighlightsConfirmation = true
+                        } label: {
+                            Label("Remove All Highlights", systemImage: "highlighter")
+                        }
+                    }
+
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }

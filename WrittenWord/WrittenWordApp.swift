@@ -18,8 +18,7 @@ struct WrittenWordApp: App {
             Word.self,
             Note.self,
             Highlight.self,
-            Bookmark.self,
-            Item.self
+            Bookmark.self
         ])
         
         let modelConfiguration = ModelConfiguration(

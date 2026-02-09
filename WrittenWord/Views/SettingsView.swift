@@ -69,9 +69,9 @@ struct SettingsView: View {
                         Text("\(Int(leftMargin)) pt")
                             .foregroundStyle(.secondary)
                     }
-                    Slider(value: $leftMargin, in: 0...200, step: 10)
+                    Slider(value: $leftMargin, in: 30...250, step: 10)
                 }
-                
+
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Right Margin")
@@ -79,7 +79,7 @@ struct SettingsView: View {
                         Text("\(Int(rightMargin)) pt")
                             .foregroundStyle(.secondary)
                     }
-                    Slider(value: $rightMargin, in: 0...200, step: 10)
+                    Slider(value: $rightMargin, in: 0...250, step: 10)
                 }
                 
                 Button("Reset to Defaults") {
