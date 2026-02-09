@@ -206,6 +206,7 @@ struct AnnotationCanvasView: UIViewRepresentable {
         canvasView.isOpaque = false
         canvasView.drawing = drawing
         canvasView.drawingPolicy = .anyInput  // Allow finger + pencil
+        canvasView.isScrollEnabled = false     // Canvas doesn't scroll independently; parent ScrollView handles it
         canvasView.delegate = context.coordinator
 
         // Add Apple Pencil double-tap interaction

@@ -187,10 +187,9 @@ struct ChapterView: View {
     
     @ViewBuilder
     private func chapterContent(_ vm: ChapterViewModel) -> some View {
-        ZStack {
-            // Text content (bottom layer)
-            ScrollViewReader { proxy in
-                ScrollView {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
                     // Previous chapter button at top
                     if let previousChapter = vm.previousChapter, vm.searchText.isEmpty {
                         Button {
@@ -252,7 +251,7 @@ struct ChapterView: View {
                             selectionRange: vm.selectedRange
                         )
                     }
-                    
+
                     // Continue to next chapter button
                     if let nextChapter = vm.nextChapter, vm.searchText.isEmpty {
                         Button {
@@ -273,42 +272,42 @@ struct ChapterView: View {
                         .padding(.bottom, 40)
                     }
                 }
-                .scrollIndicators(.hidden)
-                .simultaneousGesture(
-                    MagnificationGesture()
-                        .onChanged { scale in
-                            if pinchBaseFontSize == nil {
-                                pinchBaseFontSize = fontSize
+                // Annotation canvas — overlaid on content so it scrolls with the text.
+                // Drawings stay positioned relative to verses (e.g., a note next to John 1:5
+                // remains next to John 1:5 when scrolling).
+                .overlay {
+                    if vm.showAnnotations {
+                        AnnotationCanvasView(
+                            drawing: vm.bindingForChapterNoteDrawing(),
+                            selectedTool: vm.selectedTool,
+                            selectedColor: vm.selectedColor,
+                            penWidth: vm.penWidth,
+                            eraserType: vm.eraserType,
+                            canvasView: vm.bindingForCanvasView(),
+                            onPencilDoubleTap: {
+                                withAnimation {
+                                    vm.toggleCurrentTool()
+                                }
                             }
-                            let newSize = (pinchBaseFontSize ?? fontSize) * scale
-                            fontSize = min(max(newSize, 12), 36)
-                        }
-                        .onEnded { _ in
-                            pinchBaseFontSize = nil
-                        }
-                )
-            }
-            
-            // Annotation canvas overlay (top layer) - ONLY when annotations enabled
-            if vm.showAnnotations {
-                GeometryReader { geometry in
-                    AnnotationCanvasView(
-                        drawing: vm.bindingForChapterNoteDrawing(),
-                        selectedTool: vm.selectedTool,
-                        selectedColor: vm.selectedColor,
-                        penWidth: vm.penWidth,
-                        eraserType: vm.eraserType,
-                        canvasView: vm.bindingForCanvasView(),
-                        onPencilDoubleTap: {
-                            withAnimation {
-                                vm.toggleCurrentTool()
-                            }
-                        }
-                    )
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                    .allowsHitTesting(vm.selectedTool != .none)  // CRITICAL
+                        )
+                        .allowsHitTesting(vm.selectedTool != .none)
+                    }
                 }
             }
+            .scrollIndicators(.hidden)
+            .simultaneousGesture(
+                MagnificationGesture()
+                    .onChanged { scale in
+                        if pinchBaseFontSize == nil {
+                            pinchBaseFontSize = fontSize
+                        }
+                        let newSize = (pinchBaseFontSize ?? fontSize) * scale
+                        fontSize = min(max(newSize, 12), 36)
+                    }
+                    .onEnded { _ in
+                        pinchBaseFontSize = nil
+                    }
+            )
         }
     }
     
