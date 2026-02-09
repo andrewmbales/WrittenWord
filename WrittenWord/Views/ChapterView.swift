@@ -279,29 +279,31 @@ struct ChapterView: View {
     
     @ToolbarContentBuilder
     private func toolbarContent(_ vm: ChapterViewModel) -> some ToolbarContent {
-        // Annotation toggle button
+        // Annotation and interlinear toggle buttons
         ToolbarItem(placement: .navigationBarLeading) {
-            Button {
-                withAnimation {
-                    vm.toggleAnnotations()
+            HStack(spacing: 12) {
+                Button {
+                    withAnimation {
+                        vm.toggleAnnotations()
+                    }
+                } label: {
+                    Image(systemName: vm.showAnnotations ?
+                        "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                        .foregroundColor(vm.showAnnotations ? .blue : .primary)
                 }
-            } label: {
-                Image(systemName: vm.showAnnotations ?
-                    "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
-                    .foregroundColor(vm.showAnnotations ? .blue : .primary)
-            }
 
-            // Interlinear toggle button (א for OT, α for NT)
-            Button {
-                withAnimation {
-                    vm.showInterlinear.toggle()
+                // Interlinear toggle button (א for OT, α for NT)
+                Button {
+                    withAnimation {
+                        vm.showInterlinear.toggle()
+                    }
+                } label: {
+                    Text(vm.interlinearCharacter)
+                        .font(.system(size: 18, weight: vm.showInterlinear ? .bold : .regular))
+                        .foregroundColor(vm.showInterlinear ? .green : .primary)
                 }
-            } label: {
-                Text(vm.interlinearCharacter)
-                    .font(.system(size: 18, weight: vm.showInterlinear ? .bold : .regular))
-                    .foregroundColor(vm.showInterlinear ? .green : .primary)
+                .help(vm.interlinearLanguage)
             }
-            .help(vm.interlinearLanguage)
         }
                 
         // Navigation and menu

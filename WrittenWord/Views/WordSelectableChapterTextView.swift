@@ -256,10 +256,24 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
     class Coordinator: NSObject, UITextViewDelegate {
         var parent: WordSelectableChapterTextView
         var verses: [Verse]
+        var isHandlingGesture = false
 
         init(_ parent: WordSelectableChapterTextView) {
             self.parent = parent
             self.verses = parent.verses
+        }
+
+        /// Adjusts a gesture point from textView coordinates to text container coordinates
+        private func textContainerPoint(for point: CGPoint, in textView: UITextView) -> CGPoint {
+            CGPoint(
+                x: point.x - textView.textContainerInset.left,
+                y: point.y - textView.textContainerInset.top
+            )
+        }
+
+        /// Returns the length of the verse number prefix (e.g. "1 " = 2, "10 " = 3)
+        private func versePrefixLength(for verse: Verse) -> Int {
+            "\(verse.number) ".count
         }
 
         // MARK: - Tap: select entire verse for highlighting
@@ -269,8 +283,9 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
                   let textView = gesture.view as? UITextView else { return }
 
             let point = gesture.location(in: textView)
+            let containerPoint = textContainerPoint(for: point, in: textView)
             let characterIndex = textView.layoutManager.characterIndex(
-                for: point,
+                for: containerPoint,
                 in: textView.textContainer,
                 fractionOfDistanceBetweenInsertionPoints: nil
             )
@@ -280,13 +295,19 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
             let dummyRange = NSRange(location: characterIndex, length: 1)
             guard let verse = findVerse(for: dummyRange, in: textView.attributedText) else { return }
 
-            // Clear any native text selection
-            textView.selectedRange = NSRange(location: 0, length: 0)
+            // Show visual selection on the verse text (excluding number prefix)
+            let fullVerseRange = calculateVerseRange(for: verse, in: textView.attributedText.string)
+            let prefixLen = versePrefixLength(for: verse)
+            isHandlingGesture = true
+            textView.selectedRange = NSRange(
+                location: fullVerseRange.location + prefixLen,
+                length: fullVerseRange.length - prefixLen
+            )
+            isHandlingGesture = false
 
             if let onVerseTapped = parent.onVerseTapped {
                 onVerseTapped(verse)
             } else {
-                // Fallback: select entire verse text
                 let range = NSRange(location: 0, length: verse.text.count)
                 parent.onTextSelected(verse, range, verse.text)
             }
@@ -299,8 +320,9 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
                   let textView = gesture.view as? UITextView else { return }
 
             let point = gesture.location(in: textView)
+            let containerPoint = textContainerPoint(for: point, in: textView)
             let characterIndex = textView.layoutManager.characterIndex(
-                for: point,
+                for: containerPoint,
                 in: textView.textContainer,
                 fractionOfDistanceBetweenInsertionPoints: nil
             )
@@ -312,34 +334,38 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
             let dummyRange = NSRange(location: characterIndex, length: 1)
             guard let verse = findVerse(for: dummyRange, in: textView.attributedText) else { return }
             let verseRange = calculateVerseRange(for: verse, in: fullString as String)
+            let prefixLen = versePrefixLength(for: verse)
+            let textStart = verseRange.location + prefixLen
 
             // Find word boundaries within the full string
             let wordRange = fullString.rangeOfCharacter(from: .whitespaces, options: [], range: NSRange(location: characterIndex, length: fullString.length - characterIndex))
             let wordStart: Int = {
                 let beforeRange = fullString.rangeOfCharacter(from: .whitespaces, options: .backwards, range: NSRange(location: 0, length: characterIndex))
-                return beforeRange.location == NSNotFound ? verseRange.location : beforeRange.location + beforeRange.length
+                return beforeRange.location == NSNotFound ? textStart : beforeRange.location + beforeRange.length
             }()
             let wordEnd: Int = wordRange.location == NSNotFound ? verseRange.location + verseRange.length : wordRange.location
 
             guard wordEnd > wordStart else { return }
             let absoluteWordRange = NSRange(location: wordStart, length: wordEnd - wordStart)
 
-            // Clamp to verse boundary
-            let clampedStart = max(absoluteWordRange.location, verseRange.location)
+            // Clamp to verse text boundary (excluding number prefix)
+            let clampedStart = max(absoluteWordRange.location, textStart)
             let clampedEnd = min(absoluteWordRange.location + absoluteWordRange.length, verseRange.location + verseRange.length)
             guard clampedEnd > clampedStart else { return }
 
             let selectedWord = fullString.substring(with: NSRange(location: clampedStart, length: clampedEnd - clampedStart))
 
-            // Convert to verse-relative range
-            let relativeLocation = clampedStart - verseRange.location
+            // Convert to verse-text-relative range (excluding number prefix)
+            let relativeLocation = clampedStart - textStart
             let relativeRange = NSRange(location: relativeLocation, length: clampedEnd - clampedStart)
 
             guard relativeRange.location >= 0,
                   relativeRange.location + relativeRange.length <= verse.text.count else { return }
 
             // Visually highlight the word in the text view
+            isHandlingGesture = true
             textView.selectedRange = NSRange(location: clampedStart, length: clampedEnd - clampedStart)
+            isHandlingGesture = false
 
             parent.onTextSelected(verse, relativeRange, selectedWord)
         }
@@ -347,6 +373,8 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
         // MARK: - Native selection delegate (still needed for drag-select)
 
         func textViewDidChangeSelection(_ textView: UITextView) {
+            guard !isHandlingGesture else { return }
+
             let selectedRange = textView.selectedRange
 
             guard selectedRange.length > 0 else { return }
@@ -360,16 +388,21 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
             // Find which verse this selection STARTS in
             guard let verse = findVerse(for: selectedRange, in: textView.attributedText) else { return }
 
-            // Calculate range relative to verse text
+            // Calculate range relative to verse text (excluding number prefix)
             let verseRange = calculateVerseRange(for: verse, in: textView.attributedText.string)
+            let prefixLen = versePrefixLength(for: verse)
+            let textStart = verseRange.location + prefixLen
 
-            let verseEndPosition = verseRange.location + verseRange.length
+            let verseTextEnd = verseRange.location + verseRange.length
             let selectionEndPosition = selectedRange.location + selectedRange.length
-            let effectiveSelectionEnd = min(selectionEndPosition, verseEndPosition)
-            let effectiveSelectionLength = effectiveSelectionEnd - selectedRange.location
+            let effectiveSelectionEnd = min(selectionEndPosition, verseTextEnd)
+            let effectiveStart = max(selectedRange.location, textStart)
+            guard effectiveSelectionEnd > effectiveStart else { return }
+            let effectiveSelectionLength = effectiveSelectionEnd - effectiveStart
 
-            let relativeLocation = max(0, selectedRange.location - verseRange.location)
-            let relativeLength = max(0, min(effectiveSelectionLength, verseRange.length - relativeLocation))
+            let relativeLocation = max(0, effectiveStart - textStart)
+            let verseTextLength = verseRange.length - prefixLen
+            let relativeLength = max(0, min(effectiveSelectionLength, verseTextLength - relativeLocation))
 
             let relativeRange = NSRange(location: relativeLocation, length: relativeLength)
 
