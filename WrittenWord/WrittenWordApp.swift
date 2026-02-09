@@ -172,6 +172,14 @@ func seedDataIfNeeded(container: ModelContainer) async {
         } catch {
             print("❌ Error seeding interlinear data: \(error)")
         }
+
+        // Seed hardcoded sample interlinear data (John 1:1-5, Genesis 1:1-5, Psalm 23:1-3)
+        debugLog("data", "🔤 Seeding expanded interlinear sample data...")
+        do {
+            try await seedExpandedInterlinearData(modelContext: modelContext)
+        } catch {
+            print("❌ Error seeding expanded interlinear data: \(error)")
+        }
         
         // Mark as complete
         didSeedData = true

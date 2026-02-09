@@ -28,6 +28,7 @@ class ChapterViewModel {
     var previousTool: AnnotationTool = .pen
     var selectedColor: Color = .black
     var penWidth: CGFloat = 1.0
+    var eraserType: EraserType = .partial
     var showingColorPicker = false
 
     // MARK: - Interlinear State (NEW - ADD THIS SECTION)
@@ -369,7 +370,12 @@ class ChapterViewModel {
             let color = UIColor(selectedColor)
             canvasView.tool = PKInkingTool(.marker, color: color, width: penWidth * 5)
         case .eraser:
-            canvasView.tool = PKEraserTool(.bitmap)
+            switch eraserType {
+            case .partial:
+                canvasView.tool = PKEraserTool(.bitmap)
+            case .object:
+                canvasView.tool = PKEraserTool(.vector)
+            }
         case .lasso:
             canvasView.tool = PKLassoTool()
         case .none:

@@ -231,6 +231,8 @@ private func seedPsalm23Interlinear(modelContext: ModelContext) async throws {
 // MARK: - Helper Function
 
 private func addWordsToVerse(_ verse: Verse, words: [(String, String, String, String, String, Int, Int, Int, String)], modelContext: ModelContext) {
+    // Skip if verse already has interlinear data
+    guard verse.words.isEmpty else { return }
     for w in words {
         let language = w.2.hasPrefix("H") ? "heb" : "grk"
         let word = Word(

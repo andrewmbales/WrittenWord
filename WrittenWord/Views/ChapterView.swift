@@ -71,6 +71,7 @@ struct ChapterView: View {
                         selectedTool: $viewModel.selectedTool,
                         selectedColor: $viewModel.selectedColor,
                         penWidth: $viewModel.penWidth,
+                        eraserType: $viewModel.eraserType,
                         showingColorPicker: $viewModel.showingColorPicker
                     )
                     Divider()
@@ -268,6 +269,7 @@ struct ChapterView: View {
                         selectedTool: vm.selectedTool,
                         selectedColor: vm.selectedColor,
                         penWidth: vm.penWidth,
+                        eraserType: vm.eraserType,
                         canvasView: vm.bindingForCanvasView()
                     )
                     .frame(width: geometry.size.width, height: geometry.size.height)

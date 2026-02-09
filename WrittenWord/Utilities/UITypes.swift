@@ -38,6 +38,11 @@ enum AnnotationTool: String, CaseIterable {
     }
 }
 
+enum EraserType: String, CaseIterable {
+    case partial = "Partial"
+    case object = "Object"
+}
+
 // MARK: - Color Theme
 enum ColorTheme: String, CaseIterable {
     case system = "System"
