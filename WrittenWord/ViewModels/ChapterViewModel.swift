@@ -37,10 +37,11 @@ class ChapterViewModel {
         guard let testament = chapter.book?.testament else { return "Original" }
         return testament == "NT" ? "Greek" : "Hebrew"
     }
-    
-    var interlinearIcon: String {
-        guard let testament = chapter.book?.testament else { return "character.book.closed" }
-        return testament == "NT" ? "character.book.closed" : "character.book.closed.fill"
+
+    /// The character displayed on the interlinear toggle button
+    var interlinearCharacter: String {
+        guard let testament = chapter.book?.testament else { return "α" }
+        return testament == "NT" ? "α" : "א"
     }
     
     // MARK: - Highlighting State
@@ -376,30 +377,27 @@ class ChapterViewModel {
         }
     }
 
+    /// Called on short tap – selects the entire verse for highlighting
+    func selectVerseForHighlight(verse: Verse) {
+        selectedVerse = verse
+        selectedRange = NSRange(location: 0, length: verse.text.count)
+        selectedText = verse.text
+        showHighlightMenu = true
+    }
+
+    /// Called on long press or drag-select – selects specific text for highlighting
     func selectTextForHighlight(verse: Verse, range: NSRange, text: String) {
         #if DEBUG
-        print("🎯 Text selected - checking for word lookup...")
+        print("🎯 Text selected for highlight")
         print("   Verse: \(verse.chapter?.book?.name ?? "") \(verse.chapter?.number ?? 0):\(verse.number)")
         print("   Range: \(range.location)-\(range.location + range.length)")
         print("   Text: \(text)")
         #endif
-        
+
         selectedVerse = verse
         selectedRange = range
         selectedText = text
-
-        if let word = WordLookupService.findWord(in: verse, for: range) {
-            #if DEBUG
-            print("✅ Found interlinear word: \(word.originalText)")
-            #endif
-            selectedWord = word
-            showInterlinearLookup = true
-        } else {
-            #if DEBUG
-            print("⚠️ No interlinear word found - showing highlight menu")
-            #endif
-            showHighlightMenu = true
-        }
+        showHighlightMenu = true
     }
 
     // MARK: - Binding Helpers

@@ -229,6 +229,9 @@ struct ChapterView: View {
                             rightMargin: rightMargin,
                             onTextSelected: { verse, range, text in
                                 vm.selectTextForHighlight(verse: verse, range: range, text: text)
+                            },
+                            onVerseTapped: { verse in
+                                vm.selectVerseForHighlight(verse: verse)
                             }
                         )
                         .padding(.vertical)
@@ -287,18 +290,18 @@ struct ChapterView: View {
                     "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
                     .foregroundColor(vm.showAnnotations ? .blue : .primary)
             }
-            
-            // NEW: Interlinear toggle button
+
+            // Interlinear toggle button (א for OT, α for NT)
             Button {
                 withAnimation {
                     vm.showInterlinear.toggle()
                 }
             } label: {
-                Image(systemName: vm.showInterlinear ?
-                    "\(vm.interlinearIcon).fill" : vm.interlinearIcon)
+                Text(vm.interlinearCharacter)
+                    .font(.system(size: 18, weight: vm.showInterlinear ? .bold : .regular))
                     .foregroundColor(vm.showInterlinear ? .green : .primary)
             }
-            .help(vm.interlinearLanguage) // Shows tooltip on hover (iPad/Mac)
+            .help(vm.interlinearLanguage)
         }
                 
         // Navigation and menu
@@ -337,18 +340,6 @@ struct ChapterView: View {
                             vm.showAnnotations ? "Hide Annotations" : "Show Annotations",
                             systemImage: vm.showAnnotations ?
                                 "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle"
-                        )
-                    }
-                    
-                    // Button in menu for toggling interlinear
-                    Button {
-                        withAnimation {
-                            vm.showInterlinear.toggle()
-                        }
-                    } label: {
-                        Label(
-                            vm.showInterlinear ? "Hide \(vm.interlinearLanguage)" : "Show \(vm.interlinearLanguage)",
-                            systemImage: vm.interlinearIcon
                         )
                     }
 
