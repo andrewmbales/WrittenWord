@@ -26,7 +26,10 @@ struct ChapterView: View {
 
     // Palette style
     @AppStorage("paletteStyle") private var paletteStyle: PaletteStyle = .horizontal
-    
+
+    // Pinch-to-zoom state
+    @State private var pinchBaseFontSize: Double?
+
     let onChapterChange: (Chapter) -> Void
     
     // MARK: - Initialization
@@ -72,7 +75,9 @@ struct ChapterView: View {
                         selectedColor: $viewModel.selectedColor,
                         penWidth: $viewModel.penWidth,
                         eraserType: $viewModel.eraserType,
-                        showingColorPicker: $viewModel.showingColorPicker
+                        showingColorPicker: $viewModel.showingColorPicker,
+                        onUndo: { vm.undoAnnotation() },
+                        onRedo: { vm.redoAnnotation() }
                     )
                     Divider()
                 }
@@ -263,6 +268,19 @@ struct ChapterView: View {
                     }
                 }
                 .scrollIndicators(.hidden)
+                .simultaneousGesture(
+                    MagnificationGesture()
+                        .onChanged { scale in
+                            if pinchBaseFontSize == nil {
+                                pinchBaseFontSize = fontSize
+                            }
+                            let newSize = (pinchBaseFontSize ?? fontSize) * scale
+                            fontSize = min(max(newSize, 12), 36)
+                        }
+                        .onEnded { _ in
+                            pinchBaseFontSize = nil
+                        }
+                )
             }
             
             // Annotation canvas overlay (top layer) - ONLY when annotations enabled

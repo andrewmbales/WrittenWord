@@ -11,13 +11,15 @@ import SwiftData
 struct GlobalSearchView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var allVerses: [Verse]
-    
+
     @State private var searchText = ""
     @State private var searchResults: [SearchResult] = []
     @State private var isSearching = false
-    
+    @State private var selectedSection: BibleSection?
+
     var filteredResults: [SearchResult] {
-        searchResults
+        guard let section = selectedSection else { return searchResults }
+        return searchResults.filter { section.orderRange.contains($0.book.order) }
     }
     
     var body: some View {
@@ -95,12 +97,32 @@ struct GlobalSearchView: View {
     private var resultsList: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
-                Text("\(filteredResults.count) results")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-                    .padding(.top)
-                
+                // Frequency chart
+                SearchFrequencyChart(
+                    results: searchResults,
+                    selectedSection: $selectedSection
+                )
+                .padding(.horizontal)
+                .padding(.top)
+
+                // Results header
+                HStack {
+                    Text("\(filteredResults.count) results")
+                        .font(.headline)
+                    Spacer()
+                    if selectedSection != nil {
+                        Button {
+                            withAnimation { selectedSection = nil }
+                        } label: {
+                            Label("Clear Filter", systemImage: "xmark.circle.fill")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+
                 ForEach(filteredResults) { result in
                     SearchResultRow(result: result, searchQuery: searchText)
                         .padding(.horizontal)
@@ -118,10 +140,11 @@ struct GlobalSearchView: View {
         }
         
         isSearching = true
-        
+        selectedSection = nil
+
         Task {
             let results = await searchVerses(query: query)
-            
+
             await MainActor.run {
                 searchResults = results
                 isSearching = false
@@ -185,6 +208,76 @@ struct SearchResultRow: View {
         .padding()
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
+    }
+}
+
+// MARK: - Search Frequency Chart
+struct SearchFrequencyChart: View {
+    let results: [SearchResult]
+    @Binding var selectedSection: BibleSection?
+
+    private var sectionCounts: [(section: BibleSection, count: Int)] {
+        BibleSection.allCases.compactMap { section in
+            let count = results.filter { section.orderRange.contains($0.book.order) }.count
+            return count > 0 ? (section, count) : nil
+        }
+    }
+
+    private var maxCount: Int {
+        sectionCounts.map(\.count).max() ?? 1
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header
+            Text("\(results.count) verses found. Tap chart to filter.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            // Bars
+            VStack(spacing: 6) {
+                ForEach(sectionCounts, id: \.section) { item in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            if selectedSection == item.section {
+                                selectedSection = nil
+                            } else {
+                                selectedSection = item.section
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text(item.section.rawValue)
+                                .font(.caption)
+                                .foregroundStyle(selectedSection == nil || selectedSection == item.section ? .primary : .tertiary)
+                                .frame(width: 120, alignment: .trailing)
+                                .lineLimit(1)
+
+                            GeometryReader { geo in
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(item.section.color.opacity(
+                                        selectedSection == nil || selectedSection == item.section ? 1.0 : 0.3
+                                    ))
+                                    .frame(
+                                        width: max(4, geo.size.width * CGFloat(item.count) / CGFloat(maxCount))
+                                    )
+                            }
+                            .frame(height: 20)
+
+                            Text("\(item.count)")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(selectedSection == nil || selectedSection == item.section ? .primary : .tertiary)
+                                .frame(width: 40, alignment: .leading)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemGray6).opacity(0.5))
+        .cornerRadius(12)
     }
 }
 

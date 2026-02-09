@@ -375,6 +375,14 @@ class ChapterViewModel {
         showAnnotations.toggle()
     }
 
+    func undoAnnotation() {
+        canvasView.undoManager?.undo()
+    }
+
+    func redoAnnotation() {
+        canvasView.undoManager?.redo()
+    }
+
     // Add this method to ChapterViewModel_Optimized.swift
 
     // Converts AnnotationTool to DrawingTool for canvas compatibility

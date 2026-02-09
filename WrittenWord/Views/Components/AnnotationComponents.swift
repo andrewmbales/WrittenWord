@@ -16,6 +16,8 @@ struct AnnotationToolbar: View {
     @Binding var penWidth: CGFloat
     @Binding var eraserType: EraserType
     @Binding var showingColorPicker: Bool
+    let onUndo: () -> Void
+    let onRedo: () -> Void
 
     private let predefinedColors: [Color] = [
         .black, .gray, .red, .orange, .yellow,
@@ -25,6 +27,11 @@ struct AnnotationToolbar: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
+                // Undo / Redo
+                undoRedoButtons
+
+                Divider().frame(height: 40)
+
                 // Tool selection
                 toolButtons
 
@@ -44,6 +51,24 @@ struct AnnotationToolbar: View {
             .padding(.vertical, 8)
         }
         .background(.ultraThinMaterial)
+    }
+
+    private var undoRedoButtons: some View {
+        HStack(spacing: 4) {
+            Button(action: onUndo) {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.title3)
+                    .frame(width: 44, height: 44)
+            }
+            .foregroundColor(.primary)
+
+            Button(action: onRedo) {
+                Image(systemName: "arrow.uturn.forward")
+                    .font(.title3)
+                    .frame(width: 44, height: 44)
+            }
+            .foregroundColor(.primary)
+        }
     }
 
     private var toolButtons: some View {
@@ -252,7 +277,9 @@ struct AnnotationCanvasView: UIViewRepresentable {
             selectedColor: .constant(.black),
             penWidth: .constant(2.0),
             eraserType: .constant(.partial),
-            showingColorPicker: .constant(false)
+            showingColorPicker: .constant(false),
+            onUndo: { },
+            onRedo: { }
         )
         Spacer()
     }
