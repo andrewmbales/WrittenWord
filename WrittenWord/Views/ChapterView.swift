@@ -168,7 +168,7 @@ struct ChapterView: View {
         }
         .sheet(isPresented: vm.bindingForShowingDrawing()) {
             NavigationStack {
-                FullPageDrawingView(note: vm.chapterNote)
+                FullPageDrawingView(chapter: vm.chapter)
             }
             .preferredColorScheme(colorTheme.preferredColorScheme)
         }
