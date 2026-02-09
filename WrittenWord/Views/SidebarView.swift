@@ -116,32 +116,47 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .background(colorTheme.backgroundColor)
         .navigationTitle("Written Word")
-        // Sheets for views that need them
+        // Sheets — themed to match the app color scheme
         .sheet(isPresented: $showingSettings) {
             NavigationStack {
                 SettingsView()
             }
+            .preferredColorScheme(colorTheme.preferredColorScheme)
         }
         .sheet(isPresented: $showingNotebook) {
             NavigationStack {
                 NotebookView_Optimized()
+                    .scrollContentBackground(.hidden)
+                    .background(colorTheme.backgroundColor)
             }
+            .preferredColorScheme(colorTheme.preferredColorScheme)
         }
         .sheet(isPresented: $showingHighlights) {
             NavigationStack {
                 HighlightsView()
+                    .scrollContentBackground(.hidden)
+                    .background(colorTheme.backgroundColor)
             }
+            .preferredColorScheme(colorTheme.preferredColorScheme)
         }
         .sheet(isPresented: $showingBookmarks) {
             NavigationStack {
                 BookmarksView()
+                    .scrollContentBackground(.hidden)
+                    .background(colorTheme.backgroundColor)
             }
+            .preferredColorScheme(colorTheme.preferredColorScheme)
         }
         .sheet(isPresented: $showingStats) {
             NavigationStack {
                 HighlightStatsView()
+                    .scrollContentBackground(.hidden)
+                    .background(colorTheme.backgroundColor)
             }
+            .preferredColorScheme(colorTheme.preferredColorScheme)
         }
     }
     

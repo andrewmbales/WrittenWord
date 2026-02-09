@@ -12,6 +12,8 @@ struct GlobalSearchView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var allVerses: [Verse]
 
+    @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
+
     @State private var searchText = ""
     @State private var searchResults: [SearchResult] = []
     @State private var isSearching = false
@@ -26,10 +28,11 @@ struct GlobalSearchView: View {
         VStack(spacing: 0) {
             mainContent
         }
+        .background(colorTheme.backgroundColor)
         .navigationTitle("Search Bible")
         .searchable(text: $searchText, prompt: "Search...")
-        .onChange(of: searchText) { _, newValue in
-            performSearch(query: newValue)
+        .onSubmit(of: .search) {
+            performSearch(query: searchText)
         }
     }
     

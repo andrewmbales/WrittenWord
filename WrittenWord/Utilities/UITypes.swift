@@ -82,6 +82,14 @@ enum ColorTheme: String, CaseIterable {
         case .sand: return Color(red: 0.3, green: 0.25, blue: 0.2)
         }
     }
+
+    var preferredColorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light, .sepia, .sand: return .light
+        case .dark: return .dark
+        }
+    }
 }
 
 // MARK: - Font Family

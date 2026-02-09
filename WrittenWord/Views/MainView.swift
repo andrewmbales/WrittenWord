@@ -52,7 +52,7 @@ struct MainView: View {
             .navigationSplitViewColumnWidth(min: 600, ideal: 900)
         }
         .navigationSplitViewStyle(.balanced)
-        .preferredColorScheme(colorTheme == .dark ? .dark : colorTheme == .light ? .light : nil)
+        .preferredColorScheme(colorTheme.preferredColorScheme)
         .background(colorTheme.backgroundColor)
         .onChange(of: selectedChapter) { _, newValue in
             // When selecting a chapter, hide search and collapse sidebar

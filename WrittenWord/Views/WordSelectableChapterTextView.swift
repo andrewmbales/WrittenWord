@@ -106,33 +106,36 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
     }
     
     func updateUIView(_ textView: UITextView, context: Context) {
-        #if DEBUG
-        print("🔄 Updating UITextView: \(verses.count) verses, margins=(\(leftMargin), \(rightMargin))")
-        #endif
-        
         // Update margins if changed
-        let currentInsets = textView.textContainerInset
         let newInsets = UIEdgeInsets(
             top: 20,
             left: leftMargin,
             bottom: 20,
             right: rightMargin
         )
-        
-        if currentInsets != newInsets {
+
+        if textView.textContainerInset != newInsets {
             textView.textContainerInset = newInsets
         }
-        
+
         // Update coordinator
         context.coordinator.verses = verses
-        
+
         // Build and set attributed text
-        let attributedText = buildAttributedText()
-        textView.attributedText = attributedText
-        
-        // Force layout update
+        textView.attributedText = buildAttributedText()
+
+        // Tell SwiftUI our size changed so the ScrollView allocates enough room
+        textView.invalidateIntrinsicContentSize()
         textView.setNeedsLayout()
         textView.layoutIfNeeded()
+    }
+
+    /// Tells SwiftUI exactly how tall the text view needs to be so no verses
+    /// are clipped, regardless of font size.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        let width = proposal.width ?? UIScreen.main.bounds.width
+        let size = uiView.sizeThatFits(CGSize(width: width, height: CGFloat.greatestFiniteMagnitude))
+        return CGSize(width: width, height: size.height)
     }
     
     func makeCoordinator() -> Coordinator {
