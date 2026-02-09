@@ -385,7 +385,7 @@ class ChapterViewModel {
         showHighlightMenu = true
     }
 
-    /// Called on long press or drag-select – selects specific text for highlighting
+    /// Called on long press or drag-select – checks interlinear first, then falls back to highlight
     func selectTextForHighlight(verse: Verse, range: NSRange, text: String) {
         #if DEBUG
         print("🎯 Text selected for highlight")
@@ -397,6 +397,15 @@ class ChapterViewModel {
         selectedVerse = verse
         selectedRange = range
         selectedText = text
+
+        // If interlinear mode is active, try word lookup first
+        if showInterlinear, let word = WordLookupService.findWord(in: verse, for: range) {
+            selectedWord = word
+            showInterlinearLookup = true
+            return
+        }
+
+        // Fallback: show highlight menu
         showHighlightMenu = true
     }
 
