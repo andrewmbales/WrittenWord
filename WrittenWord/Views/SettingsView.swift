@@ -21,6 +21,9 @@ struct SettingsView: View {
     // Highlight palette style
     @AppStorage("paletteStyle") private var paletteStyle: PaletteStyle = .horizontal
 
+    // Apple Pencil
+    @AppStorage("pencilDoubleTapEnabled") private var pencilDoubleTapEnabled: Bool = true
+
     // Debug options
     @AppStorage("showVerseBorders") private var showVerseBorders: Bool = false
     
@@ -171,6 +174,15 @@ struct SettingsView: View {
                 Text("Highlighting")
             } footer: {
                 Text("Choose how the highlight color picker appears when you select text.")
+            }
+
+            // Apple Pencil Section
+            Section {
+                Toggle("Double-Tap to Toggle Tool", isOn: $pencilDoubleTapEnabled)
+            } header: {
+                Text("Apple Pencil")
+            } footer: {
+                Text("When enabled, double-tapping the Apple Pencil barrel toggles between the current annotation tool and no tool, making it easy to switch between drawing and scrolling.")
             }
 
             // Debug Options Section

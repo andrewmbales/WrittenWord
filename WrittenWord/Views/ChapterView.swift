@@ -30,6 +30,9 @@ struct ChapterView: View {
     // Interlinear persisted toggle
     @AppStorage("showInterlinear") private var showInterlinear: Bool = false
 
+    // Apple Pencil double-tap toggle setting
+    @AppStorage("pencilDoubleTapEnabled") private var pencilDoubleTapEnabled: Bool = true
+
     // Pinch-to-zoom state
     @State private var pinchBaseFontSize: Double?
 
@@ -164,8 +167,10 @@ struct ChapterView: View {
             toolbarContent(vm)
         }
         .sheet(isPresented: vm.bindingForShowingDrawing()) {
-            FullPageDrawingView(note: vm.chapterNote)
-                .preferredColorScheme(colorTheme.preferredColorScheme)
+            NavigationStack {
+                FullPageDrawingView(note: vm.chapterNote)
+            }
+            .preferredColorScheme(colorTheme.preferredColorScheme)
         }
         .sheet(isPresented: vm.bindingForShowingColorPicker()) {
             ColorPickerSheet(selectedColor: vm.bindingForSelectedColor())
@@ -285,6 +290,7 @@ struct ChapterView: View {
                             eraserType: vm.eraserType,
                             canvasView: vm.bindingForCanvasView(),
                             onPencilDoubleTap: {
+                                guard pencilDoubleTapEnabled else { return }
                                 withAnimation {
                                     vm.toggleCurrentTool()
                                 }
