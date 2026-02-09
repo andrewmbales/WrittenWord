@@ -155,7 +155,7 @@ struct GlobalSearchView: View {
     private func searchVerses(query: String) async -> [SearchResult] {
         let lowercaseQuery = query.lowercased()
         var results: [SearchResult] = []
-        
+
         for verse in allVerses {
             if verse.text.lowercased().contains(lowercaseQuery) {
                 if let chapter = verse.chapter,
@@ -169,7 +169,14 @@ struct GlobalSearchView: View {
                 }
             }
         }
-        
+
+        // Sort by book order, then chapter, then verse
+        results.sort { a, b in
+            if a.book.order != b.book.order { return a.book.order < b.book.order }
+            if a.chapter.number != b.chapter.number { return a.chapter.number < b.chapter.number }
+            return a.verse.number < b.verse.number
+        }
+
         return results
     }
 }
@@ -216,6 +223,8 @@ struct SearchFrequencyChart: View {
     let results: [SearchResult]
     @Binding var selectedSection: BibleSection?
 
+    @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
+
     private var sectionCounts: [(section: BibleSection, count: Int)] {
         BibleSection.allCases.compactMap { section in
             let count = results.filter { section.orderRange.contains($0.book.order) }.count
@@ -225,6 +234,11 @@ struct SearchFrequencyChart: View {
 
     private var maxCount: Int {
         sectionCounts.map(\.count).max() ?? 1
+    }
+
+    /// Single bar color derived from the app's color theme
+    private var barColor: Color {
+        colorTheme.textColor
     }
 
     var body: some View {
@@ -237,6 +251,7 @@ struct SearchFrequencyChart: View {
             // Bars
             VStack(spacing: 6) {
                 ForEach(sectionCounts, id: \.section) { item in
+                    let isActive = selectedSection == nil || selectedSection == item.section
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             if selectedSection == item.section {
@@ -249,15 +264,13 @@ struct SearchFrequencyChart: View {
                         HStack(spacing: 8) {
                             Text(item.section.rawValue)
                                 .font(.caption)
-                                .foregroundStyle(selectedSection == nil || selectedSection == item.section ? .primary : .tertiary)
+                                .foregroundStyle(isActive ? .primary : .tertiary)
                                 .frame(width: 120, alignment: .trailing)
                                 .lineLimit(1)
 
                             GeometryReader { geo in
                                 RoundedRectangle(cornerRadius: 4)
-                                    .fill(item.section.color.opacity(
-                                        selectedSection == nil || selectedSection == item.section ? 1.0 : 0.3
-                                    ))
+                                    .fill(barColor.opacity(isActive ? 0.7 : 0.2))
                                     .frame(
                                         width: max(4, geo.size.width * CGFloat(item.count) / CGFloat(maxCount))
                                     )
@@ -267,7 +280,7 @@ struct SearchFrequencyChart: View {
                             Text("\(item.count)")
                                 .font(.caption)
                                 .fontWeight(.medium)
-                                .foregroundStyle(selectedSection == nil || selectedSection == item.section ? .primary : .tertiary)
+                                .foregroundStyle(isActive ? .primary : .tertiary)
                                 .frame(width: 40, alignment: .leading)
                         }
                     }
