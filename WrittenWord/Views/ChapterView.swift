@@ -298,7 +298,12 @@ struct ChapterView: View {
                         selectedColor: vm.selectedColor,
                         penWidth: vm.penWidth,
                         eraserType: vm.eraserType,
-                        canvasView: vm.bindingForCanvasView()
+                        canvasView: vm.bindingForCanvasView(),
+                        onPencilDoubleTap: {
+                            withAnimation {
+                                vm.toggleCurrentTool()
+                            }
+                        }
                     )
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .allowsHitTesting(vm.selectedTool != .none)  // CRITICAL

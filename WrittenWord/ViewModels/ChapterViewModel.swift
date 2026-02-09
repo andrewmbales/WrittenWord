@@ -365,6 +365,20 @@ class ChapterViewModel {
         showAnnotations.toggle()
     }
 
+    /// Toggle between current annotation tool and no-tool (for Apple Pencil double-tap)
+    func toggleCurrentTool() {
+        if selectedTool != .none {
+            // Currently drawing — switch to no-tool for scrolling
+            previousTool = selectedTool
+            selectedTool = .none
+            updateCanvasTool()
+        } else {
+            // Currently no-tool — restore previous tool
+            selectedTool = previousTool
+            updateCanvasTool()
+        }
+    }
+
     func undoAnnotation() {
         canvasView.undoManager?.undo()
     }

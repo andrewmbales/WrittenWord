@@ -195,6 +195,7 @@ struct AnnotationCanvasView: UIViewRepresentable {
     let penWidth: CGFloat
     let eraserType: EraserType
     @Binding var canvasView: PKCanvasView
+    var onPencilDoubleTap: (() -> Void)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -207,11 +208,19 @@ struct AnnotationCanvasView: UIViewRepresentable {
         canvasView.drawingPolicy = .anyInput  // Allow finger + pencil
         canvasView.delegate = context.coordinator
 
+        // Add Apple Pencil double-tap interaction
+        let pencilInteraction = UIPencilInteraction()
+        pencilInteraction.delegate = context.coordinator
+        canvasView.addInteraction(pencilInteraction)
+
         updateTool()
         return canvasView
     }
 
     func updateUIView(_ uiView: PKCanvasView, context: Context) {
+        // Keep coordinator reference up-to-date
+        context.coordinator.parent = self
+
         // Suppress delegate sync while we programmatically update the drawing
         if uiView.drawing != drawing {
             context.coordinator.suppressDrawingSync = true
@@ -250,9 +259,9 @@ struct AnnotationCanvasView: UIViewRepresentable {
         canvasView.isOpaque = false
     }
 
-    // MARK: - Coordinator (PKCanvasViewDelegate)
+    // MARK: - Coordinator (PKCanvasViewDelegate + UIPencilInteractionDelegate)
 
-    class Coordinator: NSObject, PKCanvasViewDelegate {
+    class Coordinator: NSObject, PKCanvasViewDelegate, UIPencilInteractionDelegate {
         var parent: AnnotationCanvasView
         var suppressDrawingSync = false
 
@@ -265,6 +274,12 @@ struct AnnotationCanvasView: UIViewRepresentable {
             // Sync canvas drawing back to binding so it stays up-to-date
             // This prevents updateUIView from overwriting with a stale drawing
             parent.drawing = canvasView.drawing
+        }
+
+        // MARK: - UIPencilInteractionDelegate
+
+        func pencilInteractionDidTap(_ interaction: UIPencilInteraction) {
+            parent.onPencilDoubleTap?()
         }
     }
 }

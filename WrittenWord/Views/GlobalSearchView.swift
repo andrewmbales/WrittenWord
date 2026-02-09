@@ -2,7 +2,7 @@
 //  GlobalSearchView.swift
 //  WrittenWord
 //
-//  FIXED: Uses chapter binding instead of NavigationLink
+//  REDESIGNED: Large centered search bar instead of .searchable
 //
 
 import SwiftUI
@@ -17,64 +17,144 @@ struct GlobalSearchView: View {
     @State private var searchText = ""
     @State private var searchResults: [SearchResult] = []
     @State private var isSearching = false
+    @State private var hasSearched = false
     @State private var selectedSection: BibleSection?
+    @FocusState private var isSearchFieldFocused: Bool
 
     var filteredResults: [SearchResult] {
         guard let section = selectedSection else { return searchResults }
         return searchResults.filter { section.orderRange.contains($0.book.order) }
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
-            mainContent
+            if hasSearched && !isSearching {
+                // Post-search: compact search bar at top + results
+                compactSearchBar
+                Divider()
+
+                if filteredResults.isEmpty {
+                    noResultsView
+                } else {
+                    resultsList
+                }
+            } else if isSearching {
+                compactSearchBar
+                Divider()
+                loadingView
+            } else {
+                // Landing: large centered search bar
+                landingView
+            }
         }
         .background(colorTheme.backgroundColor)
         .navigationTitle("Search Bible")
-        .searchable(text: $searchText, prompt: "Search...")
-        .onSubmit(of: .search) {
-            performSearch(query: searchText)
-        }
-    }
-    
-    @ViewBuilder
-    private var mainContent: some View {
-        if searchText.isEmpty {
-            emptyStateView
-        } else if isSearching {
-            loadingView
-        } else if filteredResults.isEmpty {
-            noResultsView
-        } else {
-            resultsList
-        }
-    }
-    
-    private var emptyStateView: some View {
-        ContentUnavailableView {
-            Label("Search the Bible", systemImage: "magnifyingglass")
-        } description: {
-            VStack(spacing: 12) {
-                Text("Search across all books and chapters")
-                    .foregroundStyle(.secondary)
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Examples:")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                    
-                    Text("• \"faith\" - Find all verses with this word")
-                    Text("• \"love one another\" - Search phrases")
-                    Text("• \"John 3:16\" - Find specific verses")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding()
-                .background(Color(.systemGray6))
-                .cornerRadius(8)
+        .navigationBarTitleDisplayMode(.large)
+        .onAppear {
+            // Auto-focus the search field on appear
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                isSearchFieldFocused = true
             }
         }
     }
-    
+
+    // MARK: - Landing View (large centered search bar)
+
+    private var landingView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 48, weight: .light))
+                .foregroundStyle(.secondary.opacity(0.5))
+
+            Text("Search the Bible")
+                .font(.title2)
+                .fontWeight(.semibold)
+                .foregroundStyle(colorTheme.textColor)
+
+            // Large search field
+            HStack(spacing: 12) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .font(.title3)
+
+                TextField("Search verses...", text: $searchText)
+                    .font(.title3)
+                    .foregroundStyle(colorTheme.textColor)
+                    .focused($isSearchFieldFocused)
+                    .submitLabel(.search)
+                    .onSubmit {
+                        performSearch(query: searchText)
+                    }
+
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .background(colorTheme.textColor.opacity(0.08))
+            .cornerRadius(14)
+            .padding(.horizontal, 60)
+
+            // Hints
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Examples:")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+
+                Text("\"faith\" \u{2022} \"love one another\" \u{2022} \"beginning\"")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 4)
+
+            Spacer()
+            Spacer()
+        }
+    }
+
+    // MARK: - Compact Search Bar (after first search)
+
+    private var compactSearchBar: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+
+            TextField("Search verses...", text: $searchText)
+                .foregroundStyle(colorTheme.textColor)
+                .focused($isSearchFieldFocused)
+                .submitLabel(.search)
+                .onSubmit {
+                    performSearch(query: searchText)
+                }
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                    searchResults = []
+                    hasSearched = false
+                    selectedSection = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(colorTheme.textColor.opacity(0.06))
+    }
+
+    // MARK: - Views
+
     private var loadingView: some View {
         VStack(spacing: 16) {
             ProgressView()
@@ -84,7 +164,7 @@ struct GlobalSearchView: View {
         }
         .frame(maxHeight: .infinity)
     }
-    
+
     private var noResultsView: some View {
         ContentUnavailableView {
             Label("No Results", systemImage: "text.magnifyingglass")
@@ -93,10 +173,13 @@ struct GlobalSearchView: View {
         } actions: {
             Button("Clear Search") {
                 searchText = ""
+                searchResults = []
+                hasSearched = false
+                selectedSection = nil
             }
         }
     }
-    
+
     private var resultsList: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
@@ -134,14 +217,15 @@ struct GlobalSearchView: View {
             .padding(.bottom)
         }
     }
-    
+
     private func performSearch(query: String) {
         guard !query.isEmpty else {
             searchResults = []
             isSearching = false
+            hasSearched = false
             return
         }
-        
+
         isSearching = true
         selectedSection = nil
 
@@ -151,10 +235,11 @@ struct GlobalSearchView: View {
             await MainActor.run {
                 searchResults = results
                 isSearching = false
+                hasSearched = true
             }
         }
     }
-    
+
     private func searchVerses(query: String) async -> [SearchResult] {
         let lowercaseQuery = query.lowercased()
         var results: [SearchResult] = []
@@ -304,30 +389,30 @@ struct SearchFrequencyChart: View {
 struct HighlightedSearchText: View {
     let text: String
     let searchQuery: String
-    
+
     var attributedText: AttributedString {
         var attributed = AttributedString(text)
-        
+
         let lowercaseText = text.lowercased()
         let lowercaseQuery = searchQuery.lowercased()
-        
+
         var searchStartIndex = lowercaseText.startIndex
-        
+
         while let range = lowercaseText[searchStartIndex...].range(of: lowercaseQuery) {
             if let attrRange = Range<AttributedString.Index>(range, in: attributed) {
                 attributed[attrRange].backgroundColor = Color.yellow.opacity(0.4)
                 attributed[attrRange].font = .body.bold()
             }
-            
+
             searchStartIndex = range.upperBound
             if searchStartIndex >= lowercaseText.endIndex {
                 break
             }
         }
-        
+
         return attributed
     }
-    
+
     var body: some View {
         Text(attributedText)
     }
