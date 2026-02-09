@@ -2,7 +2,7 @@
 //  SettingsView.swift
 //  WrittenWord
 //
-//  Settings with verse border debug toggle
+//  ENHANCED: Added adjustable left/right margins for note-taking
 //
 
 import SwiftUI
@@ -14,11 +14,16 @@ struct SettingsView: View {
     @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
     @AppStorage("notePosition") private var notePosition: NotePosition = .right
     
-    // NEW: Debug options
+    // NEW: Adjustable margins
+    @AppStorage("leftMargin") private var leftMargin: Double = 40.0
+    @AppStorage("rightMargin") private var rightMargin: Double = 40.0
+    
+    // Debug options
     @AppStorage("showVerseBorders") private var showVerseBorders: Bool = false
     
     var body: some View {
         Form {
+            // Text Display Section
             Section("Text Display") {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -53,20 +58,76 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+            }
+            
+            // NEW: Margins Section
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Left Margin")
+                        Spacer()
+                        Text("\(Int(leftMargin)) pt")
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: $leftMargin, in: 0...200, step: 10)
+                }
                 
-                // Preview
-                GroupBox("Preview") {
-                    Text("In the beginning God created the heaven and the earth.")
-                        .font(.system(size: fontSize))
-                        .lineSpacing(lineSpacing)
-                        .padding()
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Right Margin")
+                        Spacer()
+                        Text("\(Int(rightMargin)) pt")
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: $rightMargin, in: 0...200, step: 10)
+                }
+                
+                Button("Reset to Defaults") {
+                    leftMargin = 40.0
+                    rightMargin = 40.0
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                
+            } header: {
+                Text("Margins")
+            } footer: {
+                Text("Adjust margins to create space for handwritten notes and annotations. Larger margins are helpful for detailed note-taking with Apple Pencil.")
+            }
+            
+            // Preview Section
+            Section("Preview") {
+                GroupBox {
+                    HStack(spacing: 0) {
+                        // Left margin indicator
+                        Rectangle()
+                            .fill(Color.blue.opacity(0.2))
+                            .frame(width: leftMargin * 0.5) // Scaled for preview
+                        
+                        VStack(alignment: .leading, spacing: lineSpacing) {
+                            Text("In the beginning God created")
+                                .font(.system(size: fontSize))
+                            Text("the heaven and the earth.")
+                                .font(.system(size: fontSize))
+                        }
+                        .padding(.vertical, 8)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(colorTheme.backgroundColor)
                         .foregroundColor(colorTheme.textColor)
-                        .cornerRadius(8)
+                        
+                        // Right margin indicator
+                        Rectangle()
+                            .fill(Color.blue.opacity(0.2))
+                            .frame(width: rightMargin * 0.5) // Scaled for preview
+                    }
+                    .cornerRadius(8)
                 }
+                
+                Text("Blue areas show margin space for annotations")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             
+            // Debug Options Section
             Section("Debug Options") {
                 Toggle("Show Verse Borders", isOn: $showVerseBorders)
                 
@@ -74,46 +135,6 @@ struct SettingsView: View {
                     Text("Red borders will appear around each verse to help visualize layout and spacing.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                }
-                
-                // In SettingsView.swift, add to "Debug Options" section:
-                NavigationLink {
-                    InterlinearDataVerificationView()
-                } label: {
-                    Label("Verify Interlinear Data", systemImage: "checkmark.circle")
-                }
-                
-                NavigationLink {
-                    InterlinearDataDebugView()
-                } label: {
-                    Label("Interlinear Debug", systemImage: "ladybug")
-                }
-            }
-            
-            Section("Notes") {
-                Picker("Note Position", selection: $notePosition) {
-                    ForEach(NotePosition.allCases, id: \.self) { position in
-                        Text(position.displayName).tag(position)
-                    }
-                }
-                .pickerStyle(.segmented)
-            }
-            
-            Section("About") {
-                HStack {
-                    Text("Version")
-                    Spacer()
-                    Text("1.0.0")
-                        .foregroundStyle(.secondary)
-                }
-                
-                Link(destination: URL(string: "https://github.com")!) {
-                    HStack {
-                        Text("GitHub")
-                        Spacer()
-                        Image(systemName: "arrow.up.right.square")
-                            .foregroundStyle(.secondary)
-                    }
                 }
             }
         }

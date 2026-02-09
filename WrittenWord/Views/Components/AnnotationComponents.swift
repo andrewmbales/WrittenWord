@@ -135,15 +135,7 @@ struct AnnotationCanvasView: UIViewRepresentable {
         canvasView.backgroundColor = .clear
         canvasView.isOpaque = false
         canvasView.drawing = drawing
-        canvasView.delegate = context.coordinator
-        
-        // CRITICAL FIX: Disable bouncing to prevent scroll conflicts
-        canvasView.alwaysBounceVertical = false
-        canvasView.alwaysBounceHorizontal = false
-        
-        // Start with interaction disabled
-        canvasView.isUserInteractionEnabled = false
-        canvasView.drawingPolicy = .pencilOnly
+        canvasView.drawingPolicy = .anyInput  // Allow finger + pencil
         
         updateTool()
         return canvasView
@@ -154,56 +146,30 @@ struct AnnotationCanvasView: UIViewRepresentable {
             uiView.drawing = drawing
         }
         updateTool()
-        updateInteractionState()
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
     }
     
     private func updateTool() {
         let uiColor = UIColor(selectedColor)
         
         switch selectedTool {
-        case .none:
-            // No tool selected
-            break
         case .pen:
             canvasView.tool = PKInkingTool(.pen, color: uiColor, width: penWidth)
+            canvasView.isUserInteractionEnabled = true
         case .highlighter:
-            canvasView.tool = PKInkingTool(
-                .marker,
-                color: uiColor.withAlphaComponent(0.3),
-                width: penWidth * 3
-            )
+            canvasView.tool = PKInkingTool(.marker, color: uiColor.withAlphaComponent(0.5), width: penWidth * 5)
+            canvasView.isUserInteractionEnabled = true
         case .eraser:
-            canvasView.tool = PKEraserTool(.vector)
+            canvasView.tool = PKEraserTool(.bitmap)
+            canvasView.isUserInteractionEnabled = true
         case .lasso:
             canvasView.tool = PKLassoTool()
-        }
-    }
-    
-    private func updateInteractionState() {
-        // CRITICAL FIX: Only enable when a tool is selected
-        if selectedTool == .none {
-            canvasView.isUserInteractionEnabled = false
-            canvasView.drawingPolicy = .pencilOnly
-        } else {
             canvasView.isUserInteractionEnabled = true
-            canvasView.drawingPolicy = .anyInput
-        }
-    }
-    
-    class Coordinator: NSObject, PKCanvasViewDelegate {
-        var parent: AnnotationCanvasView
-        
-        init(_ parent: AnnotationCanvasView) {
-            self.parent = parent
+        case .none:
+            canvasView.isUserInteractionEnabled = false
         }
         
-        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
-            parent.drawing = canvasView.drawing
-        }
+        canvasView.backgroundColor = .clear
+        canvasView.isOpaque = false
     }
 }
 

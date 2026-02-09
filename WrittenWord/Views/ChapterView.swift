@@ -2,270 +2,7 @@
 //  ChapterView.swift
 //  WrittenWord
 //
-//  Optimized chapter view with MVVM pattern, line spacing support, and easy annotation access
-//
-/*
-import SwiftUI
-import SwiftData
-import PencilKit
-
-struct ChapterView: View {
-    let chapter: Chapter
-    @State private var viewModel: ChapterViewModel?
-    @Environment(\.modelContext) private var modelContext
-
-    // Settings - now properly reactive to changes
-    @AppStorage("fontSize") private var fontSize: Double = 16.0
-    @AppStorage("lineSpacing") private var lineSpacing: Double = 6.0
-    @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
-    @AppStorage("fontFamily") private var fontFamily: FontFamily = .system
-
-    // Force recreation counter for settings changes
-    @State private var textViewRecreationID = UUID()
-    
-    let onChapterChange: (Chapter) -> Void
-    
-    // MARK: - Initialization
-    init(chapter: Chapter, onChapterChange: @escaping (Chapter) -> Void) {
-        self.chapter = chapter
-        self.onChapterChange = onChapterChange
-    }
-    
-    // MARK: - Body
-    var body: some View {
-        Group {
-            if let vm = viewModel {
-                chapterContentView(vm)
-            } else {
-                ProgressView()
-            }
-        }
-        .task(id: chapter.id) {
-            // Better lifecycle management - recreates viewModel when chapter changes
-            if viewModel == nil || viewModel?.chapter.id != chapter.id {
-                debugLog("lifecycle", "🔄 ChapterView: Creating/updating viewModel for chapter \(chapter.number)")
-                viewModel = ChapterViewModel(chapter: chapter, modelContext: modelContext)
-                await viewModel?.loadChapterNote()
-            }
-        }
-        // Watch for setting changes and force recreation
-        .onChange(of: lineSpacing) { _, newValue in
-            debugLog("settings", "📏 ChapterView: Line spacing changed to \(newValue), recreating text view")
-            textViewRecreationID = UUID()
-        }
-        .onChange(of: fontSize) { _, newValue in
-            debugLog("settings", "🔤 ChapterView: Font size changed to \(newValue), recreating text view")
-            textViewRecreationID = UUID()
-        }
-        .onChange(of: fontFamily) { _, newValue in
-            debugLog("settings", "🖋️ ChapterView: Font family changed to \(newValue.rawValue), recreating text view")
-            textViewRecreationID = UUID()
-        }
-        .onChange(of: colorTheme) { _, newValue in
-            debugLog("settings", "🎨 ChapterView: Color theme changed to \(newValue.rawValue), recreating text view")
-            textViewRecreationID = UUID()
-        }
-    }
-    
-    @ViewBuilder
-    private func chapterContentView(_ vm: ChapterViewModel) -> some View {
-        ZStack {
-            colorTheme.backgroundColor.ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Annotation toolbar (shown when annotations enabled)
-                if vm.showAnnotations {
-                    AnnotationToolbar(
-                        selectedTool: vm.bindingForSelectedTool(),
-                        selectedColor: vm.bindingForSelectedColor(),
-                        penWidth: vm.bindingForPenWidth(),
-                        showingColorPicker: vm.bindingForShowingColorPicker()
-                    )
-                    Divider()
-                }
-                
-                // Highlight palette (shown when text selected)
-                if vm.showHighlightMenu {
-                    HighlightPalette(
-                        selectedColor: vm.bindingForSelectedHighlightColor(),
-                        onHighlight: vm.createHighlight,
-                        onDismiss: {
-                            vm.showHighlightMenu = false
-                            vm.selectedRange = nil
-                            vm.selectedText = ""
-                        }
-                    )
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    Divider()
-                }
-                
-                // Chapter content with overlay
-                chapterContent(vm)
-            }
-        }
-        .navigationTitle("\(vm.chapter.book?.name ?? "") \(vm.chapter.number)")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            toolbarContent(vm)
-        }
-        .sheet(isPresented: vm.bindingForShowingDrawing()) {
-            FullPageDrawingView(note: vm.chapterNote)
-        }
-        
-        // Commenting out the below references until I can build them out more comprehensively
-       /* .sheet(isPresented: vm.bindingForShowingBookmarkSheet()) {
-            if let verse = vm.verseToBookmark {
-                BookmarkDetailView(verse: verse)
-            }
-        }
-        .sheet(isPresented: vm.bindingForShowInterlinearLookup()) {
-            if let word = vm.selectedWord {
-                InterlinearWordDetailView(word: word)
-            }
-        }*/
-        .sheet(isPresented: vm.bindingForShowingColorPicker()) {
-            ColorPickerSheet(selectedColor: vm.bindingForSelectedColor())
-        }
-        .searchable(text: vm.bindingForSearchText(), prompt: "Search verses")
-    }
-    
-    @ViewBuilder
-    private func chapterContent(_ vm: ChapterViewModel) -> some View {
-        ZStack {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    let _ = debugLog("rendering", "🔧 Building text view with settings: fontSize=\(fontSize), lineSpacing=\(lineSpacing), font=\(fontFamily.rawValue), theme=\(colorTheme.rawValue)")
-                    
-                    WordSelectableChapterTextView(
-                        verses: vm.filteredVerses,
-                        highlights: vm.filteredVerses.flatMap { verse in
-                            vm.highlightsForVerse(verse.id)
-                        },
-                        fontSize: fontSize,
-                        fontFamily: fontFamily,
-                        lineSpacing: lineSpacing,
-                        colorTheme: colorTheme,
-                        onTextSelected: { verse, range, text in
-                            vm.selectTextForHighlight(verse: verse, range: range, text: text)
-                        }
-                    )
-                    .id(textViewRecreationID)
-                    .padding(.vertical)
-                    
-                    if let nextChapter = vm.nextChapter, vm.searchText.isEmpty {
-                        Button {
-                            onChapterChange(nextChapter)
-                        } label: {
-                            HStack {
-                                Text("Continue to \(nextChapter.book?.name ?? "") \(nextChapter.number)")
-                                    .font(.headline)
-                                Image(systemName: "arrow.right.circle.fill")
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.accentColor.opacity(0.1))
-                            .cornerRadius(12)
-                        }
-                        .padding(.horizontal)
-                        .padding(.top, 20)
-                    }
-                }
-                .allowsHitTesting(vm.selectedTool == .none)
-            }
-            
-            // Annotation overlay
-            if vm.showAnnotations {
-                GeometryReader { geometry in
-                    FullPageAnnotationCanvas(
-                        note: vm.chapterNote,
-                        selectedTool: vm.convertToDrawingTool(),
-                        selectedColor: vm.selectedColor,
-                        penWidth: vm.penWidth,
-                        canvasView: vm.bindingForCanvasView()
-                    )
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                }
-            }
-        }
-    }
-    
-    // MARK: - Toolbar
-    @ToolbarContentBuilder
-    private func toolbarContent(_ viewModel: ChapterViewModel) -> some ToolbarContent {
-        // Annotation toggle button (prominent placement)
-        ToolbarItem(placement: .navigationBarTrailing) {
-            Button {
-                withAnimation {
-                    viewModel.toggleAnnotations()
-                }
-            } label: {
-                Image(systemName: viewModel.showAnnotations ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
-                    .foregroundColor(viewModel.showAnnotations ? .blue : .primary)
-            }
-        }
-        
-        // Navigation and menu
-        ToolbarItem(placement: .navigationBarTrailing) {
-            HStack(spacing: 8) {
-                // Previous chapter
-                if let previous = viewModel.previousChapter {
-                    Button {
-                        onChapterChange(previous)
-                    } label: {
-                        Image(systemName: "chevron.left")
-                    }
-                }
-                
-                // Menu with additional options
-                Menu {
-                    Button {
-                        viewModel.selectedVerse = nil
-                        viewModel.showingDrawing = true
-                    } label: {
-                        Label("Full Page Note", systemImage: "note.text.badge.plus")
-                    }
-                    
-                    Button(action: viewModel.bookmarkChapter) {
-                        Label("Bookmark Chapter", systemImage: "bookmark.fill")
-                    }
-                    
-                    Divider()
-                    
-                    // Annotation toggle also in menu (for discoverability)
-                    Button {
-                        withAnimation {
-                            viewModel.toggleAnnotations()
-                        }
-                    } label: {
-                        Label(
-                            viewModel.showAnnotations ? "Hide Annotations" : "Show Annotations",
-                            systemImage: viewModel.showAnnotations ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle"
-                        )
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                
-                // Next chapter
-                if let next = viewModel.nextChapter {
-                    Button {
-                        onChapterChange(next)
-                    } label: {
-                        Image(systemName: "chevron.right")
-                    }
-                }
-            }
-        }
-    }
-}
-
-*/
-
-//
-//  ChapterView.swift
-//  WrittenWord
-//
-//  Updated with bottom sheet interlinear panel
+//  OPTIMIZED: Better performance, margin support, and fixed bottom sheet presentation
 //
 
 import SwiftUI
@@ -282,47 +19,36 @@ struct ChapterView: View {
     @AppStorage("lineSpacing") private var lineSpacing: Double = 6.0
     @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
     @AppStorage("fontFamily") private var fontFamily: FontFamily = .system
-
-    // Force recreation counter for settings changes
-    @State private var textViewRecreationID = UUID()
+    
+    // NEW: Margin settings
+    @AppStorage("leftMargin") private var leftMargin: Double = 40.0
+    @AppStorage("rightMargin") private var rightMargin: Double = 40.0
     
     let onChapterChange: (Chapter) -> Void
     
+    // MARK: - Initialization
     init(chapter: Chapter, onChapterChange: @escaping (Chapter) -> Void) {
         self.chapter = chapter
         self.onChapterChange = onChapterChange
     }
     
+    // MARK: - Body
     var body: some View {
         Group {
             if let vm = viewModel {
                 chapterContentView(vm)
             } else {
-                ProgressView()
+                ProgressView("Loading chapter...")
             }
         }
         .task(id: chapter.id) {
             if viewModel == nil || viewModel?.chapter.id != chapter.id {
-                debugLog("lifecycle", "🔄 ChapterView: Creating/updating viewModel for chapter \(chapter.number)")
+                #if DEBUG
+                print("🔄 ChapterView: Creating viewModel for \(chapter.reference)")
+                #endif
                 viewModel = ChapterViewModel(chapter: chapter, modelContext: modelContext)
                 await viewModel?.loadChapterNote()
             }
-        }
-        .onChange(of: lineSpacing) { _, newValue in
-            debugLog("settings", "📏 ChapterView: Line spacing changed to \(newValue), recreating text view")
-            textViewRecreationID = UUID()
-        }
-        .onChange(of: fontSize) { _, newValue in
-            debugLog("settings", "🔤 ChapterView: Font size changed to \(newValue), recreating text view")
-            textViewRecreationID = UUID()
-        }
-        .onChange(of: fontFamily) { _, newValue in
-            debugLog("settings", "🖋️ ChapterView: Font family changed to \(newValue.rawValue), recreating text view")
-            textViewRecreationID = UUID()
-        }
-        .onChange(of: colorTheme) { _, newValue in
-            debugLog("settings", "🎨 ChapterView: Color theme changed to \(newValue.rawValue), recreating text view")
-            textViewRecreationID = UUID()
         }
     }
     
@@ -331,9 +57,12 @@ struct ChapterView: View {
         @Bindable var viewModel = vm
         
         ZStack {
+            // Background
             colorTheme.backgroundColor.ignoresSafeArea()
             
+            // Main content
             VStack(spacing: 0) {
+                // Annotation toolbar
                 if viewModel.showAnnotations {
                     AnnotationToolbar(
                         selectedTool: $viewModel.selectedTool,
@@ -344,6 +73,7 @@ struct ChapterView: View {
                     Divider()
                 }
                 
+                // Highlight palette
                 if viewModel.showHighlightMenu {
                     HighlightPalette(
                         selectedColor: $viewModel.selectedHighlightColor,
@@ -358,24 +88,41 @@ struct ChapterView: View {
                     Divider()
                 }
                 
+                // Chapter content
                 chapterContent(vm)
             }
             
-            // Bottom sheet for interlinear lookup
+            // FIXED: Bottom sheet for interlinear lookup (outside ScrollView for proper presentation)
             if viewModel.showInterlinearLookup, let word = viewModel.selectedWord {
-                VStack {
-                    Spacer()
-                    
-                    InterlinearBottomSheet(
-                        word: word,
-                        onDismiss: {
-                            viewModel.showInterlinearLookup = false
-                            viewModel.selectedWord = nil
+                ZStack {
+                    // Dimmed background
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation {
+                                viewModel.showInterlinearLookup = false
+                                viewModel.selectedWord = nil
+                            }
                         }
-                    )
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    
+                    // Bottom sheet
+                    VStack {
+                        Spacer()
+                        
+                        InterlinearBottomSheet(
+                            word: word,
+                            onDismiss: {
+                                withAnimation {
+                                    viewModel.showInterlinearLookup = false
+                                    viewModel.selectedWord = nil
+                                }
+                            }
+                        )
+                    }
                 }
+                .transition(.opacity)
                 .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.showInterlinearLookup)
+                .zIndex(100) // Ensure bottom sheet appears above everything
             }
         }
         .navigationTitle("\(viewModel.chapter.book?.name ?? "") \(viewModel.chapter.number)")
@@ -395,78 +142,118 @@ struct ChapterView: View {
     @ViewBuilder
     private func chapterContent(_ vm: ChapterViewModel) -> some View {
         ZStack {
+            // Text content (bottom layer)
             ScrollViewReader { proxy in
                 ScrollView {
-                    let _ = debugLog("rendering", "🔧 Building text view with settings: fontSize=\(fontSize), lineSpacing=\(lineSpacing), font=\(fontFamily.rawValue), theme=\(colorTheme.rawValue)")
-                    
-                    WordSelectableChapterTextView(
-                        verses: vm.filteredVerses,
-                        highlights: vm.filteredVerses.flatMap { verse in
-                            vm.highlightsForVerse(verse.id)
-                        },
-                        fontSize: fontSize,
-                        fontFamily: fontFamily,
-                        lineSpacing: lineSpacing,
-                        colorTheme: colorTheme,
-                        onTextSelected: { verse, range, text in
-                            vm.selectTextForHighlight(verse: verse, range: range, text: text)
+                    if vm.showInterlinear {
+                        // NEW: Interlinear mode
+                        VStack(spacing: 0) {
+                            ForEach(vm.filteredVerses, id: \.id) { verse in
+                                InterlinearVerseView(
+                                    verse: verse,
+                                    fontSize: fontSize,
+                                    fontFamily: fontFamily,
+                                    colorTheme: colorTheme,
+                                    onWordTapped: { word in
+                                        vm.selectedWord = word
+                                        vm.showInterlinearLookup = true
+                                    }
+                                )
+                            }
                         }
-                    )
-                    .id(textViewRecreationID)
-                    .padding(.vertical)
+                        .padding(.vertical)
+                    } else {
+                        // Existing: Regular text mode
+                        WordSelectableChapterTextView(
+                            verses: vm.filteredVerses,
+                            highlights: vm.filteredVerses.flatMap { verse in
+                                vm.highlightsForVerse(verse.id)
+                            },
+                            fontSize: fontSize,
+                            fontFamily: fontFamily,
+                            lineSpacing: lineSpacing,
+                            colorTheme: colorTheme,
+                            leftMargin: leftMargin,
+                            rightMargin: rightMargin,
+                            onTextSelected: { verse, range, text in
+                                vm.selectTextForHighlight(verse: verse, range: range, text: text)
+                            }
+                        )
+                        .padding(.vertical)
+                    }
                     
+                    // Continue to next chapter button
                     if let nextChapter = vm.nextChapter, vm.searchText.isEmpty {
                         Button {
                             onChapterChange(nextChapter)
                         } label: {
                             HStack {
                                 Text("Continue to \(nextChapter.book?.name ?? "") \(nextChapter.number)")
-                                    .font(.headline)
-                                Image(systemName: "arrow.right.circle.fill")
+                                Image(systemName: "arrow.right")
                             }
-                            .frame(maxWidth: .infinity)
+                            .font(.headline)
+                            .foregroundColor(.blue)
                             .padding()
-                            .background(Color.accentColor.opacity(0.1))
+                            .frame(maxWidth: .infinity)
+                            .background(Color.blue.opacity(0.1))
                             .cornerRadius(12)
                         }
                         .padding(.horizontal)
-                        .padding(.top, 20)
+                        .padding(.bottom, 40)
                     }
                 }
-                .allowsHitTesting(vm.selectedTool == .none)
+                .scrollIndicators(.hidden)
             }
             
+            // Annotation canvas overlay (top layer) - ONLY when annotations enabled
             if vm.showAnnotations {
                 GeometryReader { geometry in
-                    FullPageAnnotationCanvas(
-                        note: vm.chapterNote,
-                        selectedTool: vm.convertToDrawingTool(),
+                    AnnotationCanvasView(
+                        drawing: vm.bindingForChapterNoteDrawing(),
+                        selectedTool: vm.selectedTool,
                         selectedColor: vm.selectedColor,
                         penWidth: vm.penWidth,
                         canvasView: vm.bindingForCanvasView()
                     )
                     .frame(width: geometry.size.width, height: geometry.size.height)
+                    .allowsHitTesting(vm.selectedTool != .none)  // CRITICAL
                 }
             }
         }
     }
     
     @ToolbarContentBuilder
-    private func toolbarContent(_ viewModel: ChapterViewModel) -> some ToolbarContent {
-        ToolbarItem(placement: .navigationBarTrailing) {
+    private func toolbarContent(_ vm: ChapterViewModel) -> some ToolbarContent {
+        // Annotation toggle button
+        ToolbarItem(placement: .navigationBarLeading) {
             Button {
                 withAnimation {
-                    viewModel.toggleAnnotations()
+                    vm.toggleAnnotations()
                 }
             } label: {
-                Image(systemName: viewModel.showAnnotations ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
-                    .foregroundColor(viewModel.showAnnotations ? .blue : .primary)
+                Image(systemName: vm.showAnnotations ?
+                    "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                    .foregroundColor(vm.showAnnotations ? .blue : .primary)
             }
+            
+            // NEW: Interlinear toggle button
+            Button {
+                withAnimation {
+                    vm.showInterlinear.toggle()
+                }
+            } label: {
+                Image(systemName: vm.showInterlinear ?
+                    "\(vm.interlinearIcon).fill" : vm.interlinearIcon)
+                    .foregroundColor(vm.showInterlinear ? .green : .primary)
+            }
+            .help(vm.interlinearLanguage) // Shows tooltip on hover (iPad/Mac)
         }
-        
+                
+        // Navigation and menu
         ToolbarItem(placement: .navigationBarTrailing) {
             HStack(spacing: 8) {
-                if let previous = viewModel.previousChapter {
+                // Previous chapter
+                if let previous = vm.previousChapter {
                     Button {
                         onChapterChange(previous)
                     } label: {
@@ -474,15 +261,16 @@ struct ChapterView: View {
                     }
                 }
                 
+                // Menu with additional options
                 Menu {
                     Button {
-                        viewModel.selectedVerse = nil
-                        viewModel.showingDrawing = true
+                        vm.selectedVerse = nil
+                        vm.showingDrawing = true
                     } label: {
                         Label("Full Page Note", systemImage: "note.text.badge.plus")
                     }
                     
-                    Button(action: viewModel.bookmarkChapter) {
+                    Button(action: vm.bookmarkChapter) {
                         Label("Bookmark Chapter", systemImage: "bookmark.fill")
                     }
                     
@@ -490,19 +278,34 @@ struct ChapterView: View {
                     
                     Button {
                         withAnimation {
-                            viewModel.toggleAnnotations()
+                            vm.toggleAnnotations()
                         }
                     } label: {
                         Label(
-                            viewModel.showAnnotations ? "Hide Annotations" : "Show Annotations",
-                            systemImage: viewModel.showAnnotations ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle"
+                            vm.showAnnotations ? "Hide Annotations" : "Show Annotations",
+                            systemImage: vm.showAnnotations ?
+                                "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle"
                         )
                     }
+                    
+                    // Button in menu for toggling interlinear
+                    Button {
+                        withAnimation {
+                            vm.showInterlinear.toggle()
+                        }
+                    } label: {
+                        Label(
+                            vm.showInterlinear ? "Hide \(vm.interlinearLanguage)" : "Show \(vm.interlinearLanguage)",
+                            systemImage: vm.interlinearIcon
+                        )
+                    }
+                    
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
                 
-                if let next = viewModel.nextChapter {
+                // Next chapter
+                if let next = vm.nextChapter {
                     Button {
                         onChapterChange(next)
                     } label: {
@@ -513,3 +316,20 @@ struct ChapterView: View {
         }
     }
 }
+
+/*
+#Preview {
+    NavigationStack {
+        ChapterView(chapter: Chapter(
+            number: 1,
+            reference: "Genesis 1",
+            book: Book(
+                name: "Genesis",
+                abbrev: "Gen",
+                order: 1,
+                testament: "OT"
+            )
+        )) { _ in }
+    }
+}
+*/

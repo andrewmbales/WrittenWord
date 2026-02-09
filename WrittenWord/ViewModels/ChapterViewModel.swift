@@ -2,7 +2,7 @@
 //  ChapterViewModel.swift
 //  WrittenWord
 //
-//  Manages state and business logic for chapter display
+//  OPTIMIZED: Improved caching, performance, and memory management
 //
 
 import Foundation
@@ -16,7 +16,7 @@ class ChapterViewModel {
     private let modelContext: ModelContext
     let chapter: Chapter
 
-    // MARK: - Canvas State (moved from View)
+    // MARK: - Canvas State
     var canvasView = PKCanvasView()
     var chapterNote: Note
 
@@ -25,11 +25,24 @@ class ChapterViewModel {
     var selectedVerse: Verse?
     var showAnnotations = false
     var selectedTool: AnnotationTool = .none
-    var previousTool: AnnotationTool = .pen  // Remember last selected tool
+    var previousTool: AnnotationTool = .pen
     var selectedColor: Color = .black
     var penWidth: CGFloat = 1.0
     var showingColorPicker = false
 
+    // MARK: - Interlinear State (NEW - ADD THIS SECTION)
+    var showInterlinear = false
+    
+    var interlinearLanguage: String {
+        guard let testament = chapter.book?.testament else { return "Original" }
+        return testament == "NT" ? "Greek" : "Hebrew"
+    }
+    
+    var interlinearIcon: String {
+        guard let testament = chapter.book?.testament else { return "character.book.closed" }
+        return testament == "NT" ? "character.book.closed" : "character.book.closed.fill"
+    }
+    
     // MARK: - Highlighting State
     var showHighlightMenu = false
     var selectedText = ""
@@ -43,10 +56,7 @@ class ChapterViewModel {
     // MARK: - Search State
     var searchText = "" {
         didSet {
-            // Cancel previous debounce task
             searchDebounceTask?.cancel()
-
-            // Create new debounce task
             searchDebounceTask = Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .milliseconds(300))
                 guard !Task.isCancelled else { return }
@@ -61,20 +71,16 @@ class ChapterViewModel {
     var showingBookmarkSheet = false
     var verseToBookmark: Verse?
 
-    // MARK: - Cached Highlights (for performance)
+    // MARK: - Performance Caches
     private var highlightsCache: [UUID: [Highlight]] = [:]
-    
-    // MARK: - Cached Verses (to avoid relationship invalidation issues)
     private var versesCache: [Verse] = []
 
     // MARK: - Computed Properties
 
-    /// Verses sorted by number
     var sortedVerses: [Verse] {
         versesCache.sorted { $0.number < $1.number }
     }
 
-    /// Verses filtered by search text
     var filteredVerses: [Verse] {
         guard !searchText.isEmpty else {
             return sortedVerses
@@ -87,7 +93,6 @@ class ChapterViewModel {
         }
     }
 
-    /// Previous chapter in the book
     var previousChapter: Chapter? {
         guard let book = chapter.book else { return nil }
         let chapters = book.chapters.sorted { $0.number < $1.number }
@@ -98,7 +103,6 @@ class ChapterViewModel {
         return chapters[currentIndex - 1]
     }
 
-    /// Next chapter in the book
     var nextChapter: Chapter? {
         guard let book = chapter.book else { return nil }
         let chapters = book.chapters.sorted { $0.number < $1.number }
@@ -115,7 +119,6 @@ class ChapterViewModel {
         self.chapter = chapter
         self.modelContext = modelContext
         
-        // Initialize with placeholder note - will be loaded properly in loadChapterNote()
         self.chapterNote = Note(
             title: "Annotations - \(chapter.reference)",
             content: "",
@@ -126,15 +129,25 @@ class ChapterViewModel {
             verse: nil
         )
         
-        // Load highlights into cache for performance
+        #if DEBUG
+        print("📊 ChapterViewModel: Initializing for \(chapter.reference)")
+        #endif
+        
         loadVerses()
         loadHighlights()
     }
 
-    // MARK: - Data Loading
+    // MARK: - Data Loading (OPTIMIZED)
     
-    /// Loads verses for this chapter fresh from the database
+    /// Batch loads all verses for this chapter
     private func loadVerses() {
+        guard versesCache.isEmpty else {
+            #if DEBUG
+            print("📊 Using cached verses (\(versesCache.count))")
+            #endif
+            return
+        }
+        
         let chapterId = chapter.id
         let descriptor = FetchDescriptor<Verse>(
             predicate: #Predicate<Verse> { verse in
@@ -145,14 +158,44 @@ class ChapterViewModel {
         
         do {
             versesCache = try modelContext.fetch(descriptor)
+            #if DEBUG
+            print("📊 Loaded \(versesCache.count) verses from database")
+            #endif
         } catch {
-            print("Error loading verses: \(error.localizedDescription)")
-            // Fallback to relationship if fetch fails
+            print("❌ Error loading verses: \(error.localizedDescription)")
             versesCache = Array(chapter.verses)
         }
     }
 
-    /// Loads or creates the chapter note and initializes canvas
+    /// Batch loads all highlights for this chapter (OPTIMIZED)
+    private func loadHighlights() {
+        let verseIds = versesCache.map { $0.id }
+        
+        let descriptor = FetchDescriptor<Highlight>()
+        
+        do {
+            let allHighlights = try modelContext.fetch(descriptor)
+            let highlights = allHighlights.filter { verseIds.contains($0.verseId) }
+            
+            highlightsCache.removeAll()
+            for highlight in highlights {
+                highlightsCache[highlight.verseId, default: []].append(highlight)
+            }
+            
+            #if DEBUG
+            print("📊 Loaded \(highlights.count) highlights across \(highlightsCache.count) verses")
+            #endif
+        } catch {
+            print("❌ Error loading highlights: \(error.localizedDescription)")
+        }
+    }
+
+    /// Returns cached highlights for a verse (O(1) lookup)
+    func highlightsForVerse(_ verseId: UUID) -> [Highlight] {
+        return highlightsCache[verseId] ?? []
+    }
+
+    /// Loads or creates the chapter note
     @MainActor
     func loadChapterNote() async {
         let chapterId = chapter.id
@@ -166,8 +209,10 @@ class ChapterViewModel {
             if let existingNote = try modelContext.fetch(descriptor).first {
                 self.chapterNote = existingNote
                 self.canvasView.drawing = existingNote.drawing
+                #if DEBUG
+                print("📊 Loaded existing chapter note")
+                #endif
             } else {
-                // Create new note
                 let newNote = Note(
                     title: "Annotations - \(chapter.reference)",
                     content: "",
@@ -179,13 +224,13 @@ class ChapterViewModel {
                 )
                 modelContext.insert(newNote)
                 self.chapterNote = newNote
-                
-                // Save to ensure it persists
                 try modelContext.save()
+                #if DEBUG
+                print("📊 Created new chapter note")
+                #endif
             }
         } catch {
-            print("Error loading chapter note: \(error.localizedDescription)")
-            // Still set a default note so the app doesn't crash
+            print("❌ Error loading chapter note: \(error.localizedDescription)")
             self.chapterNote = Note(
                 title: "Annotations - \(chapter.reference)",
                 content: "",
@@ -198,47 +243,20 @@ class ChapterViewModel {
         }
     }
 
-    /// Loads highlights for this chapter into cache
-    private func loadHighlights() {
-        // Get verse IDs for this chapter from our cached verses
-        let verseIds = versesCache.map { $0.id }
-        
-        // Fetch all highlights
-        let descriptor = FetchDescriptor<Highlight>()
-        
-        do {
-            let allHighlights = try modelContext.fetch(descriptor)
-            
-            // Filter to only highlights whose verseId is in this chapter's verses
-            // This avoids touching the verse relationship which can be invalidated
-            let highlights = allHighlights.filter { highlight in
-                verseIds.contains(highlight.verseId)
-            }
-            
-            // Group by verse ID for fast lookup
-            highlightsCache.removeAll()
-            for highlight in highlights {
-                let verseId = highlight.verseId
-                highlightsCache[verseId, default: []].append(highlight)
-            }
-        } catch {
-            print("Error loading highlights: \(error.localizedDescription)")
-        }
-    }
-
-    /// Returns cached highlights for a specific verse (avoids repeated queries)
-    func highlightsForVerse(_ verseId: UUID) -> [Highlight] {
-        return highlightsCache[verseId] ?? []
-    }
-
     // MARK: - Actions
 
-    /// Creates a highlight for the selected text
     func createHighlight(color: HighlightColor) {
         guard let selectedVerse = selectedVerse,
               let range = selectedRange else {
+            #if DEBUG
+            print("❌ Cannot create highlight - missing verse or range")
+            #endif
             return
         }
+        
+        #if DEBUG
+        print("✅ Creating highlight - verse: \(selectedVerse.number), range: \(range), color: \(color.rawValue)")
+        #endif
 
         let highlight = Highlight(
             verseId: selectedVerse.id,
@@ -254,11 +272,19 @@ class ChapterViewModel {
         // Update cache immediately
         highlightsCache[selectedVerse.id, default: []].append(highlight)
         
-        saveContext()
+        // CRITICAL: Save the context
+        do {
+            try modelContext.save()
+            #if DEBUG
+            print("✅ Highlight saved successfully")
+            #endif
+        } catch {
+            print("❌ Error saving highlight: \(error.localizedDescription)")
+        }
+        
         resetSelection()
     }
 
-    /// Bookmarks the current chapter
     func bookmarkChapter() {
         let bookmark = Bookmark(
             title: "",
@@ -270,50 +296,23 @@ class ChapterViewModel {
         saveContext()
     }
 
-    /// Toggles annotation mode with proper state management
     func toggleAnnotations() {
         if showAnnotations {
-            // Turning off - save and remember tool
-            previousTool = selectedTool != .none ? selectedTool : previousTool
+            previousTool = selectedTool != .none ? selectedTool : .pen
             selectedTool = .none
-            Task {
-                await saveAnnotations()
-            }
+            canvasView.tool = PKInkingTool(.pen, color: .clear)
+            chapterNote.drawing = canvasView.drawing
+            saveContext()
         } else {
-            // Turning on - restore previous tool
             selectedTool = previousTool
+            updateCanvasTool()
         }
         showAnnotations.toggle()
     }
 
-    /// Saves the current canvas drawing to the note
-    @MainActor
-    func saveAnnotations() async {
-        // Update the note's drawing
-        chapterNote.drawing = canvasView.drawing
-        
-        do {
-            try modelContext.save()
-        } catch {
-            print("Error saving annotations: \(error.localizedDescription)")
-            // TODO: Show user-facing error alert
-        }
-    }
+    // Add this method to ChapterViewModel_Optimized.swift
 
-    /// Clears all annotations from the drawing
-    @MainActor
-    func clearAnnotations() async {
-        canvasView.drawing = PKDrawing()
-        chapterNote.drawing = PKDrawing()
-        
-        do {
-            try modelContext.save()
-        } catch {
-            print("Error clearing annotations: \(error.localizedDescription)")
-        }
-    }
-
-    /// Converts AnnotationTool to DrawingTool for canvas
+    // Converts AnnotationTool to DrawingTool for canvas compatibility
     func convertToDrawingTool() -> DrawingTool {
         switch selectedTool {
         case .none:
@@ -328,24 +327,51 @@ class ChapterViewModel {
             return .lasso
         }
     }
+    
+    func updateCanvasTool() {
+        switch selectedTool {
+        case .pen:
+            let color = UIColor(selectedColor)
+            canvasView.tool = PKInkingTool(.pen, color: color, width: penWidth)
+        case .highlighter:
+            let color = UIColor(selectedColor)
+            canvasView.tool = PKInkingTool(.marker, color: color, width: penWidth * 5)
+        case .eraser:
+            canvasView.tool = PKEraserTool(.bitmap)
+        case .lasso:
+            canvasView.tool = PKLassoTool()
+        case .none:
+            canvasView.tool = PKInkingTool(.pen, color: .clear)
+        }
+    }
 
-    /// Handles text selection - shows either interlinear lookup or highlight menu
     func selectTextForHighlight(verse: Verse, range: NSRange, text: String) {
+        #if DEBUG
+        print("🎯 Text selected - checking for word lookup...")
+        print("   Verse: \(verse.chapter?.book?.name ?? "") \(verse.chapter?.number ?? 0):\(verse.number)")
+        print("   Range: \(range.location)-\(range.location + range.length)")
+        print("   Text: \(text)")
+        #endif
+        
         selectedVerse = verse
         selectedRange = range
         selectedText = text
 
-        // Check if this is a single word with interlinear data
         if let word = WordLookupService.findWord(in: verse, for: range) {
+            #if DEBUG
+            print("✅ Found interlinear word: \(word.originalText)")
+            #endif
             selectedWord = word
             showInterlinearLookup = true
         } else {
+            #if DEBUG
+            print("⚠️ No interlinear word found - showing highlight menu")
+            #endif
             showHighlightMenu = true
         }
     }
 
     // MARK: - Binding Helpers
-    // These provide proper bindings for SwiftUI views to avoid observation issues
 
     func bindingForSearchText() -> Binding<String> {
         Binding(
@@ -410,10 +436,10 @@ class ChapterViewModel {
         )
     }
 
-    func bindingForShowInterlinearLookup() -> Binding<Bool> {
+    func bindingForShowInterlinear() -> Binding<Bool> {
         Binding(
-            get: { self.showInterlinearLookup },
-            set: { self.showInterlinearLookup = $0 }
+            get: { self.showInterlinear },
+            set: { self.showInterlinear = $0 }
         )
     }
     
@@ -424,9 +450,23 @@ class ChapterViewModel {
         )
     }
 
+    func bindingForChapterNoteDrawing() -> Binding<PKDrawing> {
+        Binding(
+            get: { self.chapterNote.drawing },
+            set: {
+                self.chapterNote.drawing = $0
+                // Auto-save on drawing change
+                do {
+                    try self.modelContext.save()
+                } catch {
+                    print("❌ Error saving drawing: \(error.localizedDescription)")
+                }
+            }
+        )
+    }
+
     // MARK: - Private Methods
 
-    /// Resets all selection state
     private func resetSelection() {
         showHighlightMenu = false
         showInterlinearLookup = false
@@ -436,18 +476,16 @@ class ChapterViewModel {
         selectedWord = nil
     }
 
-    /// Saves the model context with error handling
     private func saveContext() {
         do {
             try modelContext.save()
         } catch {
-            print("Error saving context: \(error.localizedDescription)")
+            print("❌ Error saving context: \(error.localizedDescription)")
         }
     }
 
-    /// Trigger for updating filtered verses (used by debounce)
     private func updateFilteredVerses() {
-        // This is intentionally empty - the computed property handles filtering
-        // This method exists only to trigger a view update after debouncing
+        // Intentionally empty - computed property handles filtering
     }
 }
+

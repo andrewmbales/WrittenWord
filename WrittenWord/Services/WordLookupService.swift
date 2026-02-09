@@ -1,8 +1,8 @@
 //
-//  WordLookupService_WordIndex.swift
+//  WordLookupService.swift
 //  WrittenWord
 //
-//  Updated word lookup using word index instead of character positions
+//  OPTIMIZED: Improved word matching with word-index-based lookup and fallback strategies
 //
 
 import Foundation
@@ -10,20 +10,100 @@ import SwiftData
 
 class WordLookupService {
     
-    /// Find a word based on selected text range
-    /// Now uses word-index matching instead of character positions
+    /// Find a word based on selected text range using improved matching algorithm
     static func findWord(in verse: Verse, for range: NSRange) -> Word? {
-        // Get the word at the selection position
+        #if DEBUG
+        print("🔍 WordLookupService: Finding word in verse...")
+        print("   Verse text: \(verse.text)")
+        print("   Range: \(range.location)-\(range.location + range.length)")
+        #endif
+        
+        // Extract the English word at the selection position
         guard let englishWord = extractWord(from: verse.text, at: range) else {
+            #if DEBUG
+            print("⚠️ Could not extract word from range")
+            #endif
             return nil
         }
         
-        // Find matching interlinear word
-        return findMatchingWord(
-            englishWord: englishWord,
-            inVerse: verse,
-            atRange: range
-        )
+        #if DEBUG
+        print("   Extracted word: '\(englishWord)'")
+        #endif
+        
+        // Get all words for this verse
+        let words = verse.words.sorted { $0.wordIndex < $1.wordIndex }
+        
+        #if DEBUG
+        print("   Total words in verse: \(words.count)")
+        if !words.isEmpty {
+            print("   Sample words:")
+            for (i, w) in words.prefix(3).enumerated() {
+                print("     [\(i)] \(w.originalText) → '\(w.translatedText)' (index: \(w.wordIndex))")
+            }
+        }
+        #endif
+        
+        guard !words.isEmpty else {
+            #if DEBUG
+            print("⚠️ No interlinear words found for this verse")
+            #endif
+            return nil
+        }
+        
+        // Strategy 1: Calculate word index from tap position
+        let wordIndex = calculateWordIndex(in: verse.text, at: range.location)
+        
+        #if DEBUG
+        print("   Calculated word index: \(wordIndex)")
+        #endif
+        
+        // Try exact word index match first
+        if let match = words.first(where: { $0.wordIndex == wordIndex }) {
+            #if DEBUG
+            print("✅ Match by word index: \(match.originalText)")
+            #endif
+            return match
+        }
+        
+        // Strategy 2: Fuzzy match on translatedText
+        let normalizedEnglish = normalize(englishWord)
+        
+        for word in words {
+            let normalizedTranslated = normalize(word.translatedText)
+            
+            if normalizedTranslated == normalizedEnglish {
+                #if DEBUG
+                print("✅ Match by translated text: \(word.originalText)")
+                #endif
+                return word
+            }
+        }
+        
+        // Strategy 3: Partial match (for compound words)
+        for word in words {
+            let normalizedTranslated = normalize(word.translatedText)
+            
+            if normalizedTranslated.contains(normalizedEnglish) ||
+               normalizedEnglish.contains(normalizedTranslated) {
+                #if DEBUG
+                print("✅ Match by partial text: \(word.originalText)")
+                #endif
+                return word
+            }
+        }
+        
+        // Strategy 4: Character position fallback
+        if let match = findByCharacterPosition(words: words, range: range) {
+            #if DEBUG
+            print("✅ Match by character position: \(match.originalText)")
+            #endif
+            return match
+        }
+        
+        #if DEBUG
+        print("❌ No match found for '\(englishWord)'")
+        #endif
+        return nil
     }
     
     /// Extract the English word at a given range
@@ -38,13 +118,13 @@ class WordLookupService {
         
         // If range has length, use it directly
         if range.length > 0 {
-            return nsString.substring(with: range)
+            let word = nsString.substring(with: range)
+            return cleanWord(word)
         }
         
         // Otherwise find word boundaries around tap position
         let tapPosition = range.location
         
-        // Find word boundaries
         var start = tapPosition
         var end = tapPosition
         
@@ -53,7 +133,7 @@ class WordLookupService {
         // Find start of word
         while start > 0 {
             let char = nsString.character(at: start - 1)
-            if !characterSet.contains(UnicodeScalar(char)!) {
+            if let scalar = UnicodeScalar(char), !characterSet.contains(scalar) {
                 break
             }
             start -= 1
@@ -62,7 +142,7 @@ class WordLookupService {
         // Find end of word
         while end < text.count {
             let char = nsString.character(at: end)
-            if !characterSet.contains(UnicodeScalar(char)!) {
+            if let scalar = UnicodeScalar(char), !characterSet.contains(scalar) {
                 break
             }
             end += 1
@@ -71,153 +151,82 @@ class WordLookupService {
         guard start < end else { return nil }
         
         let wordRange = NSRange(location: start, length: end - start)
-        return nsString.substring(with: wordRange)
+        let word = nsString.substring(with: wordRange)
+        return cleanWord(word)
     }
     
-    /// Find the interlinear word that matches the selected English word
-    private static func findMatchingWord(
-        englishWord: String,
-        inVerse verse: Verse,
-        atRange range: NSRange
-    ) -> Word? {
-        
-        // Get all words for this verse from the database
-        let words = getWordsForVerse(verse)
-        
-        guard !words.isEmpty else {
-            print("⚠️ No interlinear words found for \(verse.chapter?.book?.name ?? "") \(verse.chapter?.number ?? 0):\(verse.number)")
-            return nil
-        }
-        
-        // Calculate which English word index this selection corresponds to
-        let wordIndex = calculateWordIndex(in: verse.text, at: range.location)
-        
-        // Try to find by word index first (most reliable)
-        if let word = findByWordIndex(words: words, wordIndex: wordIndex, englishWord: englishWord) {
-            return word
-        }
-        
-        // Fallback: try to find by matching translatedText
-        if let word = findByTranslatedText(words: words, englishWord: englishWord) {
-            return word
-        }
-        
-        print("⚠️ Could not find interlinear word for '\(englishWord)' at index \(wordIndex)")
-        return nil
-    }
-    
-    /// Calculate which word (by index) was selected
-    private static func calculateWordIndex(in text: String, at position: Int) -> Int {
-        let beforePosition = String(text.prefix(position))
-        let words = beforePosition.components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-        return words.count
-    }
-    
-    /// Find word by matching word index
-    private static func findByWordIndex(
-        words: [Word],
-        wordIndex: Int,
-        englishWord: String
-    ) -> Word? {
-        
-        // Create a mapping of English word positions
-        // Some Greek words map to multiple English words, so we need to handle that
-        
-        var englishWordCount = 0
-        
-        for word in words.sorted(by: { $0.wordIndex < $1.wordIndex }) {
-            let translatedText = word.translatedText.lowercased()
-            
-            // Count how many English words this Greek word translates to
-            let englishWords = translatedText.components(separatedBy: .whitespacesAndNewlines)
-                .filter { !$0.isEmpty }
-            
-            // Check if our target index falls within this word's range
-            let startIndex = englishWordCount
-            let endIndex = englishWordCount + englishWords.count
-            
-            if wordIndex >= startIndex && wordIndex < endIndex {
-                // Found it! Double-check the text matches
-                let targetWord = englishWords[wordIndex - startIndex]
-                if targetWord.lowercased().contains(englishWord.lowercased()) ||
-                   englishWord.lowercased().contains(targetWord.lowercased()) {
-                    return word
-                }
-            }
-            
-            englishWordCount += englishWords.count
-        }
-        
-        return nil
-    }
-    
-    /// Find word by matching translated text (fallback)
-    private static func findByTranslatedText(
-        words: [Word],
-        englishWord: String
-    ) -> Word? {
-        
-        let normalized = englishWord.lowercased()
-            .trimmingCharacters(in: .punctuationCharacters)
-        
-        // Try exact match first
-        if let word = words.first(where: {
-            let translated = $0.translatedText.lowercased()
-                .trimmingCharacters(in: .punctuationCharacters)
-            return translated == normalized
-        }) {
-            return word
-        }
-        
-        // Try partial match (for words like "the/this/who")
-        if let word = words.first(where: {
-            let alternatives = $0.translatedText.lowercased()
-                .components(separatedBy: "/")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-            return alternatives.contains(normalized)
-        }) {
-            return word
-        }
-        
-        // Try contains (very fuzzy)
-        if let word = words.first(where: {
-            $0.translatedText.lowercased().contains(normalized) ||
-            normalized.contains($0.translatedText.lowercased())
-        }) {
-            return word
-        }
-        
-        return nil
-    }
-    
-    /// Get all Word objects for a verse from the database
+    /// Get all words for a verse, sorted by word index
     static func getWords(for verse: Verse) -> [Word] {
-        return getWordsForVerse(verse)
+        return verse.words.sorted { $0.wordIndex < $1.wordIndex }
     }
     
-    /// Get all Word objects for a verse from the database (internal implementation)
-    private static func getWordsForVerse(_ verse: Verse) -> [Word] {
-        guard let modelContext = verse.modelContext else {
-            print("⚠️ No model context for verse")
-            return []
+    /// Calculate the word index (0-based) from character position
+    private static func calculateWordIndex(in text: String, at position: Int) -> Int {
+        guard position >= 0, position < text.count else { return 0 }
+        
+        // Split text into words
+        let words = text.components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+        
+        var currentPosition = 0
+        
+        for (index, word) in words.enumerated() {
+            // Find this word in the text starting from currentPosition
+            let searchRange = NSRange(location: currentPosition, length: text.count - currentPosition)
+            let range = (text as NSString).range(of: word, range: searchRange)
+            
+            // Check if word was found (location != NSNotFound)
+            if range.location != NSNotFound {
+                // Check if tap position falls within this word's range
+                if position >= range.location && position < range.location + range.length {
+                    return index
+                }
+                
+                // Move past this word
+                currentPosition = range.location + range.length
+            }
         }
         
-        // Fetch all words for this verse
-        let verseId = verse.id
-        let descriptor = FetchDescriptor<Word>(
-            predicate: #Predicate { word in
-                word.verse?.id == verseId
-            },
-            sortBy: [SortDescriptor(\.wordIndex, order: .forward)]
-        )
-        
-        do {
-            let words = try modelContext.fetch(descriptor)
-            return words
-        } catch {
-            print("❌ Error fetching words: \(error)")
-            return []
+        // Default to last word if position is at end
+        return max(0, words.count - 1)
+    }
+    
+    /// Fallback: Find word by character position overlap
+    private static func findByCharacterPosition(words: [Word], range: NSRange) -> Word? {
+        // Find word whose position range overlaps with selection range
+        for word in words {
+            let wordStart = word.startPosition
+            let wordEnd = word.endPosition
+            let selectionStart = range.location
+            let selectionEnd = range.location + range.length
+            
+            // Check for overlap
+            if (wordStart <= selectionEnd && wordEnd >= selectionStart) {
+                return word
+            }
         }
+        
+        return nil
+    }
+    
+    /// Normalize word for comparison (lowercase, remove punctuation)
+    private static func normalize(_ word: String) -> String {
+        return word
+            .lowercased()
+            .trimmingCharacters(in: .punctuationCharacters)
+            .trimmingCharacters(in: .whitespaces)
+    }
+    
+    /// Clean word by removing verse numbers and extra punctuation
+    private static func cleanWord(_ word: String) -> String {
+        var cleaned = word
+        
+        // Remove leading verse numbers (e.g., "1Word" → "Word")
+        cleaned = cleaned.replacingOccurrences(of: "^\\d+\\s*", with: "", options: .regularExpression)
+        
+        // Remove trailing punctuation (but keep apostrophes)
+        cleaned = cleaned.trimmingCharacters(in: CharacterSet.punctuationCharacters.subtracting(CharacterSet(charactersIn: "'")))
+        
+        return cleaned
     }
 }
