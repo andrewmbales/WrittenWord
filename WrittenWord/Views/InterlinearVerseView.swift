@@ -26,14 +26,10 @@ struct InterlinearVerseView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Verse number
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: 8) {
                 Text("\(verse.number)")
-                    .font(.system(size: fontSize * 0.7))
+                    .font(.system(size: fontSize * 0.75, weight: .bold))
                     .foregroundStyle(.secondary)
-                    .padding(6)
-                    .background(Color.secondary.opacity(0.1))
-                    .clipShape(Circle())
-                    .frame(width: 36)
 
                 // Interlinear content
                 if words.isEmpty {

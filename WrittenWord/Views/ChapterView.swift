@@ -27,6 +27,9 @@ struct ChapterView: View {
     // Palette style
     @AppStorage("paletteStyle") private var paletteStyle: PaletteStyle = .horizontal
 
+    // Interlinear persisted toggle
+    @AppStorage("showInterlinear") private var showInterlinear: Bool = false
+
     // Pinch-to-zoom state
     @State private var pinchBaseFontSize: Double?
 
@@ -53,6 +56,7 @@ struct ChapterView: View {
                 print("🔄 ChapterView: Creating viewModel for \(chapter.reference)")
                 #endif
                 viewModel = ChapterViewModel(chapter: chapter, modelContext: modelContext)
+                viewModel?.showInterlinear = showInterlinear
                 await viewModel?.loadChapterNote()
             }
         }
@@ -155,7 +159,7 @@ struct ChapterView: View {
             }
         }
         .navigationTitle("\(viewModel.chapter.book?.name ?? "") \(viewModel.chapter.number)")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         .toolbar {
             toolbarContent(vm)
         }
@@ -205,7 +209,7 @@ struct ChapterView: View {
                         .padding(.top, 8)
                     }
 
-                    if vm.showInterlinear {
+                    if showInterlinear {
                         // NEW: Interlinear mode
                         VStack(spacing: 0) {
                             ForEach(vm.filteredVerses, id: \.id) { verse in
@@ -319,12 +323,13 @@ struct ChapterView: View {
                 // Interlinear toggle button (א for OT, α for NT)
                 Button {
                     withAnimation {
-                        vm.showInterlinear.toggle()
+                        showInterlinear.toggle()
+                        vm.showInterlinear = showInterlinear
                     }
                 } label: {
                     Text(vm.interlinearCharacter)
-                        .font(.system(size: 18, weight: vm.showInterlinear ? .bold : .regular))
-                        .foregroundColor(vm.showInterlinear ? .green : .primary)
+                        .font(.system(size: 18, weight: showInterlinear ? .bold : .regular))
+                        .foregroundColor(showInterlinear ? .green : .primary)
                 }
                 .help(vm.interlinearLanguage)
             }

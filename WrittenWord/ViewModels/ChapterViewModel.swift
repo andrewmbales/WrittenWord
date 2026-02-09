@@ -152,24 +152,14 @@ class ChapterViewModel {
             #endif
             return
         }
-        
-        let chapterId = chapter.id
-        let descriptor = FetchDescriptor<Verse>(
-            predicate: #Predicate<Verse> { verse in
-                verse.chapter?.id == chapterId
-            },
-            sortBy: [SortDescriptor(\.number)]
-        )
-        
-        do {
-            versesCache = try modelContext.fetch(descriptor)
-            #if DEBUG
-            print("📊 Loaded \(versesCache.count) verses from database")
-            #endif
-        } catch {
-            print("❌ Error loading verses: \(error.localizedDescription)")
-            versesCache = Array(chapter.verses)
-        }
+
+        // Use the relationship directly — more reliable than a predicate
+        // on an optional relationship (verse.chapter?.id) which SwiftData
+        // can sometimes fail to resolve for all rows.
+        versesCache = chapter.verses.sorted { $0.number < $1.number }
+        #if DEBUG
+        print("📊 Loaded \(versesCache.count) verses for \(chapter.reference)")
+        #endif
     }
 
     /// Batch loads all highlights for this chapter (OPTIMIZED)
