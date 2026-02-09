@@ -39,11 +39,38 @@ private struct ColorSwatch: View {
     }
 }
 
+// MARK: - Remove Highlight Swatch
+
+private struct RemoveHighlightSwatch: View {
+    let size: CGFloat
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(Color(.systemGray5))
+                    .frame(width: size, height: size)
+                    .overlay(
+                        Circle()
+                            .strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
+                    )
+                Image(systemName: "xmark")
+                    .font(.system(size: size * 0.35, weight: .bold))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 44, minHeight: 44)
+    }
+}
+
 // MARK: - Option A: Horizontal Row Palette
 
 struct HorizontalHighlightPalette: View {
     @Binding var selectedColor: HighlightColor
     let onHighlight: (HighlightColor) -> Void
+    let onRemove: () -> Void
     let onDismiss: () -> Void
 
     var body: some View {
@@ -53,6 +80,9 @@ struct HorizontalHighlightPalette: View {
                 .fontWeight(.medium)
 
             HStack(spacing: 8) {
+                // Remove highlight swatch (far left)
+                RemoveHighlightSwatch(size: 36, action: onRemove)
+
                 ForEach(HighlightColor.allCases, id: \.self) { color in
                     ColorSwatch(
                         highlightColor: color,
@@ -83,6 +113,7 @@ struct HorizontalHighlightPalette: View {
 struct CompactPopoverPalette: View {
     @Binding var selectedColor: HighlightColor
     let onHighlight: (HighlightColor) -> Void
+    let onRemove: () -> Void
     let onDismiss: () -> Void
 
     private let columns = [
@@ -109,8 +140,11 @@ struct CompactPopoverPalette: View {
                 .buttonStyle(.plain)
             }
 
-            // 3x2 color grid
+            // Color grid with remove swatch first
             LazyVGrid(columns: columns, spacing: 8) {
+                // Remove highlight swatch (far left, before colors)
+                RemoveHighlightSwatch(size: 44, action: onRemove)
+
                 ForEach(HighlightColor.allCases, id: \.self) { color in
                     ColorSwatch(
                         highlightColor: color,
@@ -139,6 +173,7 @@ struct CompactPopoverPalette: View {
 struct HighlightPalette: View {
     @Binding var selectedColor: HighlightColor
     let onHighlight: (HighlightColor) -> Void
+    let onRemove: () -> Void
     let onDismiss: () -> Void
 
     @AppStorage("paletteStyle") private var paletteStyle: PaletteStyle = .horizontal
@@ -149,12 +184,14 @@ struct HighlightPalette: View {
             HorizontalHighlightPalette(
                 selectedColor: $selectedColor,
                 onHighlight: onHighlight,
+                onRemove: onRemove,
                 onDismiss: onDismiss
             )
         case .popover:
             CompactPopoverPalette(
                 selectedColor: $selectedColor,
                 onHighlight: onHighlight,
+                onRemove: onRemove,
                 onDismiss: onDismiss
             )
         }
@@ -168,6 +205,7 @@ struct HighlightPalette: View {
         HorizontalHighlightPalette(
             selectedColor: .constant(.yellow),
             onHighlight: { _ in },
+            onRemove: { },
             onDismiss: { }
         )
         Spacer()
@@ -180,6 +218,7 @@ struct HighlightPalette: View {
         CompactPopoverPalette(
             selectedColor: .constant(.blue),
             onHighlight: { _ in },
+            onRemove: { },
             onDismiss: { }
         )
     }

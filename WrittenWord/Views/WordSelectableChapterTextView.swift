@@ -20,6 +20,8 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
     let rightMargin: Double
     let onTextSelected: (Verse, NSRange, String) -> Void
     let onVerseTapped: ((Verse) -> Void)?
+    let selectedVerseId: UUID?
+    let selectionRange: NSRange?
 
     @AppStorage("showVerseBorders") private var showVerseBorders: Bool = false
 
@@ -32,7 +34,9 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
          leftMargin: Double,
          rightMargin: Double,
          onTextSelected: @escaping (Verse, NSRange, String) -> Void,
-         onVerseTapped: ((Verse) -> Void)? = nil) {
+         onVerseTapped: ((Verse) -> Void)? = nil,
+         selectedVerseId: UUID? = nil,
+         selectionRange: NSRange? = nil) {
         self.verses = verses
         self.highlights = highlights
         self.fontSize = fontSize
@@ -43,6 +47,8 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
         self.rightMargin = rightMargin
         self.onTextSelected = onTextSelected
         self.onVerseTapped = onVerseTapped
+        self.selectedVerseId = selectedVerseId
+        self.selectionRange = selectionRange
     }
         
     func makeUIView(context: Context) -> UITextView {
@@ -150,24 +156,16 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
             // Verse text with paragraph style
             let verseText = NSMutableAttributedString(string: verse.text)
             
-            // Configure paragraph style for line spacing
+            // Configure paragraph style
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.lineBreakMode = .byWordWrapping
             paragraphStyle.alignment = .natural
-            
-            // Line height configuration
-            let desiredTotalLineHeight = fontSize + lineSpacing
-            let lineHeightMultiplier = desiredTotalLineHeight / fontSize
-            
-            paragraphStyle.lineHeightMultiple = lineHeightMultiplier
-            paragraphStyle.minimumLineHeight = desiredTotalLineHeight
-            paragraphStyle.maximumLineHeight = desiredTotalLineHeight
-            
-            // Verse spacing for debug mode
-            if showVerseBorders {
-                paragraphStyle.paragraphSpacing = 12
-                paragraphStyle.paragraphSpacingBefore = 12
-            }
+
+            // Comfortable line height within multi-line verses
+            paragraphStyle.lineSpacing = fontSize * 0.3
+
+            // Verse-to-verse spacing controlled by the settings slider
+            paragraphStyle.paragraphSpacing = lineSpacing
             
             // Font selection
             let font: UIFont
@@ -220,6 +218,17 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
                 }
             }
             
+            // Selection highlight (visible feedback before choosing a color)
+            if verse.id == selectedVerseId, let selection = selectionRange {
+                if selection.location >= 0 && selection.location + selection.length <= verseText.length {
+                    verseText.addAttribute(
+                        .backgroundColor,
+                        value: UIColor.systemBlue.withAlphaComponent(0.25),
+                        range: selection
+                    )
+                }
+            }
+
             // Debug: Add verse borders (using background color)
             if showVerseBorders {
                 verseText.addAttribute(

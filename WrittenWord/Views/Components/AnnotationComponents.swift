@@ -265,6 +265,9 @@ struct AnnotationCanvasView: UIViewRepresentable {
             onHighlight: { color in
                 print("Selected color: \(color)")
             },
+            onRemove: {
+                print("Removed")
+            },
             onDismiss: {
                 print("Dismissed")
             }

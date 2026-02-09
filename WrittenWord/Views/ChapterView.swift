@@ -82,6 +82,7 @@ struct ChapterView: View {
                     HorizontalHighlightPalette(
                         selectedColor: $viewModel.selectedHighlightColor,
                         onHighlight: viewModel.createHighlight,
+                        onRemove: viewModel.removeHighlightAtSelection,
                         onDismiss: {
                             viewModel.showHighlightMenu = false
                             viewModel.selectedRange = nil
@@ -101,6 +102,7 @@ struct ChapterView: View {
                         CompactPopoverPalette(
                             selectedColor: $viewModel.selectedHighlightColor,
                             onHighlight: viewModel.createHighlight,
+                            onRemove: viewModel.removeHighlightAtSelection,
                             onDismiss: {
                                 viewModel.showHighlightMenu = false
                                 viewModel.selectedRange = nil
@@ -233,7 +235,9 @@ struct ChapterView: View {
                             },
                             onVerseTapped: { verse in
                                 vm.selectVerseForHighlight(verse: verse)
-                            }
+                            },
+                            selectedVerseId: vm.selectedVerse?.id,
+                            selectionRange: vm.selectedRange
                         )
                         .padding(.vertical)
                     }

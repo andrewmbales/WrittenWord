@@ -39,6 +39,7 @@ struct WrittenWordApp: App {
                 .modelContainer(sharedModelContainer)
                 .task {
                     await seedDataIfNeeded(container: sharedModelContainer)
+                    await ensureInterlinearSampleData(container: sharedModelContainer)
                 }
         }
     }
@@ -173,14 +174,6 @@ func seedDataIfNeeded(container: ModelContainer) async {
             print("❌ Error seeding interlinear data: \(error)")
         }
 
-        // Seed hardcoded sample interlinear data (John 1:1-5, Genesis 1:1-5, Psalm 23:1-3)
-        debugLog("data", "🔤 Seeding expanded interlinear sample data...")
-        do {
-            try await seedExpandedInterlinearData(modelContext: modelContext)
-        } catch {
-            print("❌ Error seeding expanded interlinear data: \(error)")
-        }
-        
         // Mark as complete
         didSeedData = true
         
@@ -191,6 +184,35 @@ func seedDataIfNeeded(container: ModelContainer) async {
         
     } catch {
         print("❌ Seeding failed: \(error)")
+    }
+}
+
+// MARK: - Interlinear Sample Data (runs independently of main seed)
+
+@MainActor
+func ensureInterlinearSampleData(container: ModelContainer) async {
+    let key = "didSeedExpandedInterlinear_v2"
+    guard !UserDefaults.standard.bool(forKey: key) else {
+        debugLog("data", "✅ Expanded interlinear data already seeded")
+        return
+    }
+
+    let modelContext = container.mainContext
+
+    // Books must exist before we can attach words to verses
+    let bookFetch = FetchDescriptor<Book>()
+    guard let books = try? modelContext.fetch(bookFetch), !books.isEmpty else {
+        debugLog("data", "⚠️ No books in database - skipping interlinear sample seeding")
+        return
+    }
+
+    debugLog("data", "🔤 Seeding expanded interlinear sample data (John 1:1-5, Genesis 1:1-5, Psalm 23:1-3)...")
+    do {
+        try await seedExpandedInterlinearData(modelContext: modelContext)
+        UserDefaults.standard.set(true, forKey: key)
+        debugLog("data", "✅ Expanded interlinear sample data seeded successfully")
+    } catch {
+        print("❌ Error seeding expanded interlinear data: \(error)")
     }
 }
 

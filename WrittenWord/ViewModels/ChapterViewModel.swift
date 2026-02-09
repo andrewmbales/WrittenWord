@@ -290,6 +290,38 @@ class ChapterViewModel {
         resetSelection()
     }
 
+    /// Remove highlights overlapping with the current selection
+    func removeHighlightAtSelection() {
+        guard let selectedVerse = selectedVerse,
+              let range = selectedRange else {
+            resetSelection()
+            return
+        }
+
+        let verseHighlights = highlightsCache[selectedVerse.id] ?? []
+
+        // Find highlights that overlap with the selection
+        let overlapping = verseHighlights.filter { highlight in
+            let hStart = highlight.startIndex
+            let hEnd = highlight.endIndex
+            let sStart = range.location
+            let sEnd = range.location + range.length
+            return hStart < sEnd && hEnd > sStart
+        }
+
+        for highlight in overlapping {
+            modelContext.delete(highlight)
+        }
+
+        if !overlapping.isEmpty {
+            let removedIds = Set(overlapping.map { $0.id })
+            highlightsCache[selectedVerse.id]?.removeAll { removedIds.contains($0.id) }
+            saveContext()
+        }
+
+        resetSelection()
+    }
+
     func removeAllHighlightsInChapter() {
         let verseIds = versesCache.map { $0.id }
 

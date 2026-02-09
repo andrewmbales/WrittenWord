@@ -40,12 +40,12 @@ struct SettingsView: View {
                 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("Line Spacing")
+                        Text("Verse Spacing")
                         Spacer()
-                        Text("\(Int(lineSpacing))")
+                        Text("\(Int(lineSpacing)) pt")
                             .foregroundStyle(.secondary)
                     }
-                    Slider(value: $lineSpacing, in: 2...36, step: 2)
+                    Slider(value: $lineSpacing, in: 0...36, step: 2)
                 }
                 
                 Picker("Font Family", selection: $fontFamily) {
@@ -105,18 +105,18 @@ struct SettingsView: View {
                         Rectangle()
                             .fill(Color.blue.opacity(0.2))
                             .frame(width: leftMargin * 0.5) // Scaled for preview
-                        
+
                         VStack(alignment: .leading, spacing: lineSpacing) {
-                            Text("In the beginning God created")
+                            Text("1 In the beginning God created the heaven and the earth.")
                                 .font(.system(size: fontSize))
-                            Text("the heaven and the earth.")
+                            Text("2 And the earth was without form, and void.")
                                 .font(.system(size: fontSize))
                         }
                         .padding(.vertical, 8)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(colorTheme.backgroundColor)
                         .foregroundColor(colorTheme.textColor)
-                        
+
                         // Right margin indicator
                         Rectangle()
                             .fill(Color.blue.opacity(0.2))
@@ -150,12 +150,14 @@ struct SettingsView: View {
                             HorizontalHighlightPalette(
                                 selectedColor: .constant(.yellow),
                                 onHighlight: { _ in },
+                                onRemove: { },
                                 onDismiss: { }
                             )
                         case .popover:
                             CompactPopoverPalette(
                                 selectedColor: .constant(.blue),
                                 onHighlight: { _ in },
+                                onRemove: { },
                                 onDismiss: { }
                             )
                         }
