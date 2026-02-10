@@ -14,7 +14,8 @@ import SwiftData
 
 struct NotebookView_Optimized: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Note.updatedAt, order: .reverse) private var notes: [Note]
+    // Exclude annotation-only notes (isMarginNote == true); those are internal canvas data
+    @Query(filter: #Predicate<Note> { $0.isMarginNote == false }, sort: \Note.updatedAt, order: .reverse) private var notes: [Note]
     
     @State private var showingNewNote = false
     @State private var searchText = ""

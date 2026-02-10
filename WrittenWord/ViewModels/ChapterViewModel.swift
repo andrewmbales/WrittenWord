@@ -190,51 +190,42 @@ class ChapterViewModel {
         return highlightsCache[verseId] ?? []
     }
 
-    /// Loads or creates the chapter note
+    /// Loads or creates the chapter annotation note.
+    /// Uses the chapter.notes relationship directly (more reliable than
+    /// SwiftData predicates on optional relationships).
+    /// Annotation notes are marked isMarginNote = true so they stay
+    /// hidden from the user-facing notebook.
     @MainActor
     func loadChapterNote() async {
-        let chapterId = chapter.id
-        let descriptor = FetchDescriptor<Note>(
-            predicate: #Predicate<Note> { note in
-                note.chapter?.id == chapterId && note.verse == nil
-            }
-        )
-        
-        do {
-            if let existingNote = try modelContext.fetch(descriptor).first {
-                self.chapterNote = existingNote
-                self.canvasView.drawing = existingNote.drawing
-                #if DEBUG
-                print("📊 Loaded existing chapter note")
-                #endif
-            } else {
-                let newNote = Note(
-                    title: "Annotations - \(chapter.reference)",
-                    content: "",
-                    drawing: PKDrawing(),
-                    verseReference: chapter.reference,
-                    isMarginNote: false,
-                    chapter: chapter,
-                    verse: nil
-                )
-                modelContext.insert(newNote)
-                self.chapterNote = newNote
-                try modelContext.save()
-                #if DEBUG
-                print("📊 Created new chapter note")
-                #endif
-            }
-        } catch {
-            print("❌ Error loading chapter note: \(error.localizedDescription)")
-            self.chapterNote = Note(
+        // Use the relationship directly — same pattern as loadVerses()
+        let existingNote = chapter.notes.first { $0.verse == nil && $0.isMarginNote }
+
+        if let existingNote {
+            self.chapterNote = existingNote
+            self.canvasView.drawing = existingNote.drawing
+            #if DEBUG
+            print("📊 Loaded existing annotation note for \(chapter.reference)")
+            #endif
+        } else {
+            let newNote = Note(
                 title: "Annotations - \(chapter.reference)",
                 content: "",
                 drawing: PKDrawing(),
                 verseReference: chapter.reference,
-                isMarginNote: false,
+                isMarginNote: true,
                 chapter: chapter,
                 verse: nil
             )
+            modelContext.insert(newNote)
+            self.chapterNote = newNote
+            do {
+                try modelContext.save()
+            } catch {
+                print("❌ Error saving new annotation note: \(error.localizedDescription)")
+            }
+            #if DEBUG
+            print("📊 Created new annotation note for \(chapter.reference)")
+            #endif
         }
     }
 
