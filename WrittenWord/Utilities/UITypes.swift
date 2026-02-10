@@ -38,6 +38,11 @@ enum AnnotationTool: String, CaseIterable {
     }
 }
 
+enum EraserType: String, CaseIterable {
+    case partial = "Partial"
+    case object = "Object"
+}
+
 // MARK: - Color Theme
 enum ColorTheme: String, CaseIterable {
     case system = "System"
@@ -75,6 +80,14 @@ enum ColorTheme: String, CaseIterable {
         case .dark: return Color.white
         case .sepia: return Color(red: 0.2, green: 0.15, blue: 0.1)
         case .sand: return Color(red: 0.3, green: 0.25, blue: 0.2)
+        }
+    }
+
+    var preferredColorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light, .sepia, .sand: return .light
+        case .dark: return .dark
         }
     }
 }

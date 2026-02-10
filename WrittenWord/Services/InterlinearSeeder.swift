@@ -128,46 +128,72 @@ func seedInterlinearData(modelContext: ModelContext) async throws {
     }
     
     let sortedUrls = urls.sorted { $0.lastPathComponent < $1.lastPathComponent }
-    
+
     print("   Found \(sortedUrls.count) interlinear JSON files")
-    
+
+    var totalWordsInserted = 0
+
     for url in sortedUrls {
         let filename = url.deletingPathExtension().lastPathComponent
-        
+
         // Convert filename to book name (e.g., "john" -> "John", "1_john" -> "1 John")
         let bookName = filename
             .replacingOccurrences(of: "_", with: " ")
             .split(separator: " ")
             .map { $0.capitalized }
             .joined(separator: " ")
-        
-        print("   📝 Seeding \(bookName)...")
-        
+
+        print("   📝 Seeding interlinear for '\(bookName)' (file: \(filename).json)...")
+
         do {
             let data = try Data(contentsOf: url)
             let bookData = try JSONDecoder().decode(InterlinearBookData.self, from: data)
-            
-            var wordsInserted = 0
-            
-            for verseData in bookData.verses {
-                // Find the verse in the database
-                let targetVerseNumber = verseData.verse
-                let fetchDescriptor = FetchDescriptor<Verse>(
-                    predicate: #Predicate<Verse> { verse in
-                        verse.number == targetVerseNumber
-                    }
-                )
 
-                let verses = try modelContext.fetch(fetchDescriptor)
-                guard let verse = verses.first else {
-                    // Verse not found - skip silently (may be from different translation)
+            print("      📊 JSON book field: '\(bookData.book)', verses in JSON: \(bookData.verses.count)")
+
+            // Find the book in the database by name
+            let bookFetch = FetchDescriptor<Book>(
+                predicate: #Predicate<Book> { b in
+                    b.name == bookName
+                }
+            )
+            guard let book = try modelContext.fetch(bookFetch).first else {
+                print("      ❌ Book '\(bookName)' not found in database!")
+                continue
+            }
+
+            print("      ✅ Found book '\(book.name)' with \(book.chapters.count) chapters")
+
+            // Build verse lookup: [chapterNumber: [verseNumber: Verse]]
+            var verseLookup: [Int: [Int: Verse]] = [:]
+            for chapter in book.chapters {
+                var chapterVerses: [Int: Verse] = [:]
+                for verse in chapter.verses {
+                    chapterVerses[verse.number] = verse
+                }
+                verseLookup[chapter.number] = chapterVerses
+            }
+
+            var wordsInserted = 0
+            var versesSkipped = 0
+            var versesNotFound = 0
+
+            for verseData in bookData.verses {
+                // Look up by book + chapter + verse (not just verse number)
+                guard let verse = verseLookup[verseData.chapter]?[verseData.verse] else {
+                    versesNotFound += 1
+                    if versesNotFound <= 5 {
+                        print("      ⚠️ \(bookName) \(verseData.chapter):\(verseData.verse) not found in DB")
+                    }
                     continue
                 }
 
-                
                 // Skip if already has interlinear data
-                guard verse.words.isEmpty else { continue }
-                
+                guard verse.words.isEmpty else {
+                    versesSkipped += 1
+                    continue
+                }
+
                 // Insert words
                 for wordData in verseData.words {
                     let word = Word(
@@ -183,23 +209,27 @@ func seedInterlinearData(modelContext: ModelContext) async throws {
                         language: wordData.language,
                         verse: verse
                     )
-                    
+
                     modelContext.insert(word)
                     verse.words.append(word)
                     wordsInserted += 1
                 }
             }
-            
+
             // Save per book to avoid memory pressure
             try modelContext.save()
-            print("      ✅ Inserted \(wordsInserted) words")
-            
+            totalWordsInserted += wordsInserted
+            print("      ✅ Inserted \(wordsInserted) words (\(versesSkipped) already had data, \(versesNotFound) not found)")
+            if versesNotFound > 5 {
+                print("      ⚠️ ... and \(versesNotFound - 5) more verses not found")
+            }
+
         } catch {
             print("      ❌ Error processing \(filename): \(error)")
         }
     }
-    
-    if (didSeedInterlinear == true) {
-        print("🎉 Interlinear data seeding complete!")
-    }
+
+    // Mark seeding as complete
+    UserDefaults.standard.set(true, forKey: didSeedKey)
+    print("🎉 Interlinear JSON seeding complete! Total words inserted: \(totalWordsInserted)")
 }

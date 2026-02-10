@@ -1,38 +1,47 @@
 //
-//  AnnotationComponents_FIXED.swift
+//  AnnotationComponents.swift
 //  WrittenWord
 //
 //  FIXED: Better annotation canvas that doesn't interfere with scrolling
+//  UPDATED: Eraser type dropdown, drawing sync via delegate
 //
 
 import SwiftUI
 import PencilKit
 
-// MARK: - Annotation Toolbar (unchanged, kept for reference)
+// MARK: - Annotation Toolbar
 struct AnnotationToolbar: View {
     @Binding var selectedTool: AnnotationTool
     @Binding var selectedColor: Color
     @Binding var penWidth: CGFloat
+    @Binding var eraserType: EraserType
     @Binding var showingColorPicker: Bool
-    
+    let onUndo: () -> Void
+    let onRedo: () -> Void
+
     private let predefinedColors: [Color] = [
         .black, .gray, .red, .orange, .yellow,
         .green, .blue, .purple, .brown, .pink
     ]
-    
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
+                // Undo / Redo
+                undoRedoButtons
+
+                Divider().frame(height: 40)
+
                 // Tool selection
                 toolButtons
-                
+
                 Divider().frame(height: 40)
-                
+
                 // Color palette
                 colorButtons
-                
+
                 Divider().frame(height: 40)
-                
+
                 // Width slider (when applicable)
                 if shouldShowWidthSlider {
                     widthSlider
@@ -43,22 +52,77 @@ struct AnnotationToolbar: View {
         }
         .background(.ultraThinMaterial)
     }
-    
-    private var toolButtons: some View {
-        ForEach(AnnotationTool.allCases, id: \.self) { tool in
-            Button {
-                selectedTool = tool
-            } label: {
-                Image(systemName: tool.icon)
+
+    private var undoRedoButtons: some View {
+        HStack(spacing: 4) {
+            Button(action: onUndo) {
+                Image(systemName: "arrow.uturn.backward")
                     .font(.title3)
                     .frame(width: 44, height: 44)
-                    .background(selectedTool == tool ? Color.blue.opacity(0.2) : Color.clear)
-                    .cornerRadius(8)
             }
-            .foregroundColor(selectedTool == tool ? .blue : .primary)
+            .foregroundColor(.primary)
+
+            Button(action: onRedo) {
+                Image(systemName: "arrow.uturn.forward")
+                    .font(.title3)
+                    .frame(width: 44, height: 44)
+            }
+            .foregroundColor(.primary)
         }
     }
-    
+
+    private var toolButtons: some View {
+        ForEach(AnnotationTool.allCases, id: \.self) { tool in
+            if tool == .eraser {
+                eraserButton
+            } else {
+                Button {
+                    selectedTool = tool
+                } label: {
+                    Image(systemName: tool.icon)
+                        .font(.title3)
+                        .frame(width: 44, height: 44)
+                        .background(selectedTool == tool ? Color.blue.opacity(0.2) : Color.clear)
+                        .cornerRadius(8)
+                }
+                .foregroundColor(selectedTool == tool ? .blue : .primary)
+            }
+        }
+    }
+
+    /// Eraser button: tap to select eraser, long-press to choose type
+    private var eraserButton: some View {
+        Menu {
+            Button {
+                eraserType = .partial
+                selectedTool = .eraser
+            } label: {
+                Label("Partial Eraser", systemImage: "eraser")
+                if eraserType == .partial {
+                    Image(systemName: "checkmark")
+                }
+            }
+            Button {
+                eraserType = .object
+                selectedTool = .eraser
+            } label: {
+                Label("Object Eraser", systemImage: "eraser.line.dashed")
+                if eraserType == .object {
+                    Image(systemName: "checkmark")
+                }
+            }
+        } label: {
+            Image(systemName: AnnotationTool.eraser.icon)
+                .font(.title3)
+                .frame(width: 44, height: 44)
+                .background(selectedTool == .eraser ? Color.blue.opacity(0.2) : Color.clear)
+                .cornerRadius(8)
+        } primaryAction: {
+            selectedTool = .eraser
+        }
+        .foregroundColor(selectedTool == .eraser ? .blue : .primary)
+    }
+
     private var colorButtons: some View {
         Group {
             ForEach(predefinedColors, id: \.self) { color in
@@ -77,7 +141,7 @@ struct AnnotationToolbar: View {
                         )
                 }
             }
-            
+
             // Custom color button
             Button {
                 showingColorPicker = true
@@ -91,7 +155,7 @@ struct AnnotationToolbar: View {
                             )
                         )
                         .frame(width: 28, height: 28)
-                    
+
                     Image(systemName: "plus")
                         .font(.caption2)
                         .foregroundColor(.white)
@@ -100,109 +164,123 @@ struct AnnotationToolbar: View {
             }
         }
     }
-    
+
     private var widthSlider: some View {
         HStack(spacing: 8) {
             Image(systemName: "line.diagonal")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            
+
             Slider(value: $penWidth, in: 1...12)
                 .frame(width: 100)
                 .tint(.blue)
-            
+
             Text("\(Int(penWidth))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(width: 25)
         }
     }
-    
+
     private var shouldShowWidthSlider: Bool {
         selectedTool != .eraser && selectedTool != .lasso && selectedTool != .none
     }
 }
 
-// MARK: - FIXED Annotation Canvas View
+// MARK: - Annotation Canvas View (with delegate to sync drawing)
 struct AnnotationCanvasView: UIViewRepresentable {
     @Binding var drawing: PKDrawing
     let selectedTool: AnnotationTool
     let selectedColor: Color
     let penWidth: CGFloat
+    let eraserType: EraserType
     @Binding var canvasView: PKCanvasView
-    
+    var onPencilDoubleTap: (() -> Void)?
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
     func makeUIView(context: Context) -> PKCanvasView {
         canvasView.backgroundColor = .clear
         canvasView.isOpaque = false
         canvasView.drawing = drawing
+        canvasView.drawingPolicy = .anyInput  // Allow finger + pencil
+        canvasView.isScrollEnabled = false     // Canvas doesn't scroll independently; parent ScrollView handles it
         canvasView.delegate = context.coordinator
-        
-        // CRITICAL FIX: Disable bouncing to prevent scroll conflicts
-        canvasView.alwaysBounceVertical = false
-        canvasView.alwaysBounceHorizontal = false
-        
-        // Start with interaction disabled
-        canvasView.isUserInteractionEnabled = false
-        canvasView.drawingPolicy = .pencilOnly
-        
+
+        // Add Apple Pencil double-tap interaction
+        let pencilInteraction = UIPencilInteraction()
+        pencilInteraction.delegate = context.coordinator
+        canvasView.addInteraction(pencilInteraction)
+
         updateTool()
         return canvasView
     }
-    
+
     func updateUIView(_ uiView: PKCanvasView, context: Context) {
+        // Keep coordinator reference up-to-date
+        context.coordinator.parent = self
+
+        // Suppress delegate sync while we programmatically update the drawing
         if uiView.drawing != drawing {
+            context.coordinator.suppressDrawingSync = true
             uiView.drawing = drawing
+            context.coordinator.suppressDrawingSync = false
         }
         updateTool()
-        updateInteractionState()
     }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
+
     private func updateTool() {
         let uiColor = UIColor(selectedColor)
-        
+
         switch selectedTool {
-        case .none:
-            // No tool selected
-            break
         case .pen:
             canvasView.tool = PKInkingTool(.pen, color: uiColor, width: penWidth)
+            canvasView.isUserInteractionEnabled = true
         case .highlighter:
-            canvasView.tool = PKInkingTool(
-                .marker,
-                color: uiColor.withAlphaComponent(0.3),
-                width: penWidth * 3
-            )
+            canvasView.tool = PKInkingTool(.marker, color: uiColor.withAlphaComponent(0.5), width: penWidth * 5)
+            canvasView.isUserInteractionEnabled = true
         case .eraser:
-            canvasView.tool = PKEraserTool(.vector)
+            switch eraserType {
+            case .partial:
+                canvasView.tool = PKEraserTool(.bitmap)
+            case .object:
+                canvasView.tool = PKEraserTool(.vector)
+            }
+            canvasView.isUserInteractionEnabled = true
         case .lasso:
             canvasView.tool = PKLassoTool()
-        }
-    }
-    
-    private func updateInteractionState() {
-        // CRITICAL FIX: Only enable when a tool is selected
-        if selectedTool == .none {
-            canvasView.isUserInteractionEnabled = false
-            canvasView.drawingPolicy = .pencilOnly
-        } else {
             canvasView.isUserInteractionEnabled = true
-            canvasView.drawingPolicy = .anyInput
+        case .none:
+            canvasView.isUserInteractionEnabled = false
         }
+
+        canvasView.backgroundColor = .clear
+        canvasView.isOpaque = false
     }
-    
-    class Coordinator: NSObject, PKCanvasViewDelegate {
+
+    // MARK: - Coordinator (PKCanvasViewDelegate + UIPencilInteractionDelegate)
+
+    class Coordinator: NSObject, PKCanvasViewDelegate, UIPencilInteractionDelegate {
         var parent: AnnotationCanvasView
-        
+        var suppressDrawingSync = false
+
         init(_ parent: AnnotationCanvasView) {
             self.parent = parent
         }
-        
+
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            guard !suppressDrawingSync else { return }
+            // Sync canvas drawing back to binding so it stays up-to-date
+            // This prevents updateUIView from overwriting with a stale drawing
             parent.drawing = canvasView.drawing
+        }
+
+        // MARK: - UIPencilInteractionDelegate
+
+        func pencilInteractionDidTap(_ interaction: UIPencilInteraction) {
+            parent.onPencilDoubleTap?()
         }
     }
 }
@@ -214,7 +292,10 @@ struct AnnotationCanvasView: UIViewRepresentable {
             selectedTool: .constant(.pen),
             selectedColor: .constant(.black),
             penWidth: .constant(2.0),
-            showingColorPicker: .constant(false)
+            eraserType: .constant(.partial),
+            showingColorPicker: .constant(false),
+            onUndo: { },
+            onRedo: { }
         )
         Spacer()
     }
@@ -226,6 +307,9 @@ struct AnnotationCanvasView: UIViewRepresentable {
             selectedColor: .constant(.yellow),
             onHighlight: { color in
                 print("Selected color: \(color)")
+            },
+            onRemove: {
+                print("Removed")
             },
             onDismiss: {
                 print("Dismissed")

@@ -2,7 +2,7 @@
 //  MainView.swift
 //  WrittenWord
 //
-//  ENHANCED: Search as detail view instead of sheet
+//  ENHANCED: Sidebar overlays content instead of compressing it
 //
 
 import SwiftUI
@@ -29,7 +29,7 @@ struct MainView: View {
             )
             .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
         } detail: {
-            // Detail view - either Chapter or Search
+            // Detail view - either Chapter or Search (always full width)
             Group {
                 if showingSearch {
                     GlobalSearchView()
@@ -49,10 +49,9 @@ struct MainView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationSplitViewColumnWidth(min: 600, ideal: 900)
         }
-        .navigationSplitViewStyle(.balanced)
-        .preferredColorScheme(colorTheme == .dark ? .dark : colorTheme == .light ? .light : nil)
+        .navigationSplitViewStyle(.prominentDetail)
+        .preferredColorScheme(colorTheme.preferredColorScheme)
         .background(colorTheme.backgroundColor)
         .onChange(of: selectedChapter) { _, newValue in
             // When selecting a chapter, hide search and collapse sidebar

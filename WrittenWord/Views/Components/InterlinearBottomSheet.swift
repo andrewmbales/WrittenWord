@@ -10,7 +10,9 @@ import SwiftUI
 struct InterlinearBottomSheet: View {
     let word: Word
     let onDismiss: () -> Void
-    
+
+    @AppStorage("colorTheme") private var colorTheme: ColorTheme = .system
+
     // Snap point heights
     private let peekHeight: CGFloat = 180
     private let mediumHeight: CGFloat = 400
@@ -111,7 +113,7 @@ struct InterlinearBottomSheet: View {
                 .frame(width: max(0, geometry.size.width * 0.5), height: max(0, currentHeight + dragOffset))
                 .background(
                     RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(uiColor: .systemBackground))
+                        .fill(colorTheme.backgroundColor)
                         .shadow(color: .black.opacity(0.15), radius: 10, y: -3)
                 )
                 .overlay(
@@ -406,7 +408,7 @@ struct InterlinearBottomSheet: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(uiColor: .systemBackground))
+                .fill(colorTheme.backgroundColor)
                 .shadow(color: .black.opacity(0.1), radius: 5)
         )
         .padding(.top, 16)

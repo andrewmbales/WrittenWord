@@ -69,26 +69,41 @@ enum HighlightColor: String, CaseIterable {
     case pink = "Pink"
     case orange = "Orange"
     case purple = "Purple"
-    
-    var color: Color {
+
+    /// The swatch color shown in the palette UI (full saturation)
+    var swatchColor: Color {
         switch self {
-        case .yellow: return Color.yellow.opacity(0.4)
-        case .green: return Color.green.opacity(0.4)
-        case .blue: return Color.blue.opacity(0.4)
-        case .pink: return Color.pink.opacity(0.4)
-        case .orange: return Color.orange.opacity(0.4)
-        case .purple: return Color.purple.opacity(0.4)
+        case .yellow: return Color(red: 1.0, green: 0.922, blue: 0.231)    // #FFEB3B
+        case .green:  return Color(red: 0.545, green: 0.765, blue: 0.290)  // #8BC34A
+        case .blue:   return Color(red: 0.129, green: 0.588, blue: 0.953)  // #2196F3
+        case .pink:   return Color(red: 0.914, green: 0.118, blue: 0.388)  // #E91E63
+        case .purple: return Color(red: 0.612, green: 0.153, blue: 0.690)  // #9C27B0
+        case .orange: return Color(red: 1.0, green: 0.596, blue: 0.0)      // #FF9800
         }
     }
-    
+
+    /// The color applied to highlighted text (lower opacity for readability)
+    var color: Color {
+        swatchColor.opacity(0.4)
+    }
+}
+
+// MARK: - Palette Style
+enum PaletteStyle: String, CaseIterable {
+    case horizontal = "Horizontal Row"
+    case popover = "Compact Popover"
+
+    var description: String {
+        switch self {
+        case .horizontal: return "Color circles in a row, Apple Books style"
+        case .popover: return "Floating 3x2 grid near your selection"
+        }
+    }
+
     var icon: String {
         switch self {
-        case .yellow: return "circle.fill"
-        case .green: return "circle.fill"
-        case .blue: return "circle.fill"
-        case .pink: return "circle.fill"
-        case .orange: return "circle.fill"
-        case .purple: return "circle.fill"
+        case .horizontal: return "rectangle.split.1x2"
+        case .popover: return "rectangle.split.2x2"
         }
     }
 }

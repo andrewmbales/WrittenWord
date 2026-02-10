@@ -2,8 +2,7 @@
 //  WordSelectableChapterTextView.swift
 //  WrittenWord
 //
-//  UITextView wrapper with word selection, highlighting, proper line spacing,
-//  and optional verse borders for debugging (using underline for visibility)
+//  ENHANCED: Added margin support for note-taking with proper text wrapping
 //
 
 import SwiftUI
@@ -17,27 +16,59 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
     let fontFamily: FontFamily
     let lineSpacing: Double
     let colorTheme: ColorTheme
+    let leftMargin: Double
+    let rightMargin: Double
     let onTextSelected: (Verse, NSRange, String) -> Void
-    
-    // Debug option to show verse borders
+    let onVerseTapped: ((Verse) -> Void)?
+    let selectedVerseId: UUID?
+    let selectionRange: NSRange?
+
     @AppStorage("showVerseBorders") private var showVerseBorders: Bool = false
-        
-    // Explicit update trigger
-    var updateTrigger: String {
-        "\(fontSize)-\(lineSpacing)-\(fontFamily.rawValue)-\(colorTheme.rawValue)-\(showVerseBorders)"
+
+    init(verses: [Verse],
+         highlights: [Highlight],
+         fontSize: Double,
+         fontFamily: FontFamily,
+         lineSpacing: Double,
+         colorTheme: ColorTheme,
+         leftMargin: Double,
+         rightMargin: Double,
+         onTextSelected: @escaping (Verse, NSRange, String) -> Void,
+         onVerseTapped: ((Verse) -> Void)? = nil,
+         selectedVerseId: UUID? = nil,
+         selectionRange: NSRange? = nil) {
+        self.verses = verses
+        self.highlights = highlights
+        self.fontSize = fontSize
+        self.fontFamily = fontFamily
+        self.lineSpacing = lineSpacing
+        self.colorTheme = colorTheme
+        self.leftMargin = leftMargin
+        self.rightMargin = rightMargin
+        self.onTextSelected = onTextSelected
+        self.onVerseTapped = onVerseTapped
+        self.selectedVerseId = selectedVerseId
+        self.selectionRange = selectionRange
     }
         
     func makeUIView(context: Context) -> UITextView {
-        debugLog("rendering", "📱 Creating UITextView with lineSpacing=\(lineSpacing), fontSize=\(fontSize)")
+        #if DEBUG
+        print("📱 Creating UITextView with lineSpacing=\(lineSpacing), margins=(\(leftMargin), \(rightMargin))")
+        #endif
         
         let textView = UITextView()
         textView.delegate = context.coordinator
         textView.isEditable = false
-        textView.isScrollEnabled = false  // Let parent ScrollView handle scrolling
+        textView.isScrollEnabled = false  // Parent ScrollView handles scrolling
         textView.backgroundColor = .clear
         
-        // Proper insets for readability
-        textView.textContainerInset = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        // Apply margins via text container insets
+        textView.textContainerInset = UIEdgeInsets(
+            top: 20,
+            left: leftMargin,
+            bottom: 20,
+            right: rightMargin
+        )
         textView.textContainer.lineFragmentPadding = 0
         
         // Enable proper text wrapping
@@ -48,8 +79,6 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
         // Enable text selection
         textView.isSelectable = true
         textView.isUserInteractionEnabled = true
-        
-        // Customize selection appearance
         textView.tintColor = UIColor.systemBlue
 
         // Set content priorities for proper wrapping
@@ -58,25 +87,55 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
         textView.setContentCompressionResistancePriority(.required, for: .vertical)
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         
-        // Enable font leading for consistent line height
         textView.layoutManager.usesFontLeading = true
+
+        // Tap gesture: short press selects entire verse for highlighting
+        let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
+        tapGesture.numberOfTapsRequired = 1
+        textView.addGestureRecognizer(tapGesture)
+
+        // Long-press gesture: selects a single word
+        let longPressGesture = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleLongPress(_:)))
+        longPressGesture.minimumPressDuration = 0.5
+        textView.addGestureRecognizer(longPressGesture)
+
+        // Let the long press take priority over the tap
+        tapGesture.require(toFail: longPressGesture)
 
         return textView
     }
     
     func updateUIView(_ textView: UITextView, context: Context) {
-        debugLog("rendering", "🔄 Updating UITextView: lineSpacing=\(lineSpacing), verses=\(verses.count), verseBorders=\(showVerseBorders)")
-        
-        // Update coordinator with current verses
+        // Update margins if changed
+        let newInsets = UIEdgeInsets(
+            top: 20,
+            left: leftMargin,
+            bottom: 20,
+            right: rightMargin
+        )
+
+        if textView.textContainerInset != newInsets {
+            textView.textContainerInset = newInsets
+        }
+
+        // Update coordinator
         context.coordinator.verses = verses
-        
+
         // Build and set attributed text
-        let attributedText = buildAttributedText()
-        textView.attributedText = attributedText
-        
-        // Force layout update
+        textView.attributedText = buildAttributedText()
+
+        // Tell SwiftUI our size changed so the ScrollView allocates enough room
+        textView.invalidateIntrinsicContentSize()
         textView.setNeedsLayout()
         textView.layoutIfNeeded()
+    }
+
+    /// Tells SwiftUI exactly how tall the text view needs to be so no verses
+    /// are clipped, regardless of font size.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        let width = proposal.width ?? UIScreen.main.bounds.width
+        let size = uiView.sizeThatFits(CGSize(width: width, height: CGFloat.greatestFiniteMagnitude))
+        return CGSize(width: width, height: size.height)
     }
     
     func makeCoordinator() -> Coordinator {
@@ -84,8 +143,6 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
     }
     
     private func buildAttributedText() -> NSAttributedString {
-        debugLog("rendering", "📝 Building attributed text with lineSpacing=\(lineSpacing), verseBorders=\(showVerseBorders)")
-        
         let result = NSMutableAttributedString()
         
         for (index, verse) in verses.enumerated() {
@@ -102,28 +159,16 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
             // Verse text with paragraph style
             let verseText = NSMutableAttributedString(string: verse.text)
             
-            // Configure paragraph style for line spacing
+            // Configure paragraph style
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.lineBreakMode = .byWordWrapping
             paragraphStyle.alignment = .natural
-            
-            // Convert lineSpacing slider value (2-36) to line height multiplier
-            let desiredTotalLineHeight = fontSize + lineSpacing
-            let lineHeightMultiplier = desiredTotalLineHeight / fontSize
-            
-            paragraphStyle.lineHeightMultiple = lineHeightMultiplier
-            paragraphStyle.minimumLineHeight = desiredTotalLineHeight
-            paragraphStyle.maximumLineHeight = desiredTotalLineHeight
-            
-            // Add padding between verses when borders are shown
-            if showVerseBorders {
-                paragraphStyle.paragraphSpacing = 12
-                paragraphStyle.paragraphSpacingBefore = 12
-            }
-            
-            if index == 0 {
-                debugLog("rendering", "📐 First verse paragraph style: min/max=\(desiredTotalLineHeight), multiplier=\(lineHeightMultiplier)")
-            }
+
+            // Comfortable line height within multi-line verses
+            paragraphStyle.lineSpacing = fontSize * 0.3
+
+            // Verse-to-verse spacing controlled by the settings slider
+            paragraphStyle.paragraphSpacing = lineSpacing
             
             // Font selection
             let font: UIFont
@@ -137,25 +182,58 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
                     .withDesign(.rounded) ?? UIFont.systemFont(ofSize: fontSize).fontDescriptor
                 font = UIFont(descriptor: descriptor, size: fontSize)
             case .monospaced:
-                font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+                let descriptor = UIFont.systemFont(ofSize: fontSize).fontDescriptor
+                    .withDesign(.monospaced) ?? UIFont.systemFont(ofSize: fontSize).fontDescriptor
+                font = UIFont(descriptor: descriptor, size: fontSize)
+            }
+            
+            // Base attributes
+            let textColor: UIColor
+            switch colorTheme {
+            case .light, .sepia, .sand:
+                textColor = .black
+            case .dark:
+                textColor = .white
+            case .system:
+                textColor = .label
             }
             
             verseText.addAttributes([
                 .font: font,
-                .paragraphStyle: paragraphStyle,
-                .foregroundColor: UIColor(colorTheme.textColor)
+                .foregroundColor: textColor,
+                .paragraphStyle: paragraphStyle
             ], range: NSRange(location: 0, length: verseText.length))
             
-            // Add debug border around verse if enabled (using underline which is more visible)
-            if showVerseBorders {
-                // Background color to make verse boundaries visible
-                verseText.addAttribute(
-                    .backgroundColor,
-                    value: UIColor.systemRed.withAlphaComponent(0.08),
-                    range: NSRange(location: 0, length: verseText.length)
+            // Apply highlights
+            let verseHighlights = highlights.filter { $0.verseId == verse.id }
+            for highlight in verseHighlights {
+                let range = NSRange(
+                    location: highlight.startIndex,
+                    length: highlight.endIndex - highlight.startIndex
                 )
                 
-                // Use underline to show the verse boundary clearly
+                if range.location >= 0 && range.location + range.length <= verseText.length {
+                    verseText.addAttribute(
+                        .backgroundColor,
+                        value: UIColor(highlight.highlightColor),
+                        range: range
+                    )
+                }
+            }
+            
+            // Selection highlight (visible feedback before choosing a color)
+            if verse.id == selectedVerseId, let selection = selectionRange {
+                if selection.location >= 0 && selection.location + selection.length <= verseText.length {
+                    verseText.addAttribute(
+                        .backgroundColor,
+                        value: UIColor.systemBlue.withAlphaComponent(0.25),
+                        range: selection
+                    )
+                }
+            }
+
+            // Debug: Add verse borders (using background color)
+            if showVerseBorders {
                 verseText.addAttribute(
                     .underlineStyle,
                     value: NSUnderlineStyle.single.rawValue,
@@ -163,32 +241,14 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
                 )
                 verseText.addAttribute(
                     .underlineColor,
-                    value: UIColor.systemRed.withAlphaComponent(0.5),
+                    value: UIColor.red.withAlphaComponent(0.3),
                     range: NSRange(location: 0, length: verseText.length)
                 )
             }
             
-            // Apply highlights for this verse
-            let verseHighlights = highlights.filter { $0.verseId == verse.id }
-            for highlight in verseHighlights {
-                let highlightRange = NSRange(
-                    location: highlight.startIndex,
-                    length: highlight.endIndex - highlight.startIndex
-                )
-                
-                if highlightRange.location >= 0 &&
-                   highlightRange.location + highlightRange.length <= verseText.length {
-                    verseText.addAttribute(
-                        .backgroundColor,
-                        value: UIColor(highlight.highlightColor),
-                        range: highlightRange
-                    )
-                }
-            }
-            
             result.append(verseText)
             
-            // Add spacing between verses
+            // Add newline between verses
             if index < verses.count - 1 {
                 result.append(NSAttributedString(string: "\n"))
             }
@@ -197,114 +257,211 @@ struct WordSelectableChapterTextView: UIViewRepresentable {
         return result
     }
     
+    // MARK: - Coordinator
+    
+    //
+    //  Coordinator Fix for WordSelectableChapterTextView
+    //
+    //  Replace the Coordinator class in WordSelectableChapterTextView.swift with this
+    //
+
     class Coordinator: NSObject, UITextViewDelegate {
         var parent: WordSelectableChapterTextView
         var verses: [Verse]
-        private var selectionDebounceTask: Task<Void, Never>?
-        
+        var isHandlingGesture = false
+
         init(_ parent: WordSelectableChapterTextView) {
             self.parent = parent
             self.verses = parent.verses
-            super.init()
         }
-        
+
+        /// Adjusts a gesture point from textView coordinates to text container coordinates
+        private func textContainerPoint(for point: CGPoint, in textView: UITextView) -> CGPoint {
+            CGPoint(
+                x: point.x - textView.textContainerInset.left,
+                y: point.y - textView.textContainerInset.top
+            )
+        }
+
+        /// Returns the length of the verse number prefix (e.g. "1 " = 2, "10 " = 3)
+        private func versePrefixLength(for verse: Verse) -> Int {
+            "\(verse.number) ".count
+        }
+
+        // MARK: - Tap: select entire verse for highlighting
+
+        @objc func handleTap(_ gesture: UITapGestureRecognizer) {
+            guard gesture.state == .ended,
+                  let textView = gesture.view as? UITextView else { return }
+
+            let point = gesture.location(in: textView)
+            let containerPoint = textContainerPoint(for: point, in: textView)
+            let characterIndex = textView.layoutManager.characterIndex(
+                for: containerPoint,
+                in: textView.textContainer,
+                fractionOfDistanceBetweenInsertionPoints: nil
+            )
+
+            guard characterIndex < textView.attributedText.length else { return }
+
+            let dummyRange = NSRange(location: characterIndex, length: 1)
+            guard let verse = findVerse(for: dummyRange, in: textView.attributedText) else { return }
+
+            // Show visual selection on the verse text (excluding number prefix)
+            let fullVerseRange = calculateVerseRange(for: verse, in: textView.attributedText.string)
+            let prefixLen = versePrefixLength(for: verse)
+            isHandlingGesture = true
+            textView.selectedRange = NSRange(
+                location: fullVerseRange.location + prefixLen,
+                length: fullVerseRange.length - prefixLen
+            )
+            isHandlingGesture = false
+
+            if let onVerseTapped = parent.onVerseTapped {
+                onVerseTapped(verse)
+            } else {
+                let range = NSRange(location: 0, length: verse.text.count)
+                parent.onTextSelected(verse, range, verse.text)
+            }
+        }
+
+        // MARK: - Long press: select a single word
+
+        @objc func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+            guard gesture.state == .began,
+                  let textView = gesture.view as? UITextView else { return }
+
+            let point = gesture.location(in: textView)
+            let containerPoint = textContainerPoint(for: point, in: textView)
+            let characterIndex = textView.layoutManager.characterIndex(
+                for: containerPoint,
+                in: textView.textContainer,
+                fractionOfDistanceBetweenInsertionPoints: nil
+            )
+
+            let fullString = textView.attributedText.string as NSString
+            guard characterIndex < fullString.length else { return }
+
+            // Find the verse this character belongs to
+            let dummyRange = NSRange(location: characterIndex, length: 1)
+            guard let verse = findVerse(for: dummyRange, in: textView.attributedText) else { return }
+            let verseRange = calculateVerseRange(for: verse, in: fullString as String)
+            let prefixLen = versePrefixLength(for: verse)
+            let textStart = verseRange.location + prefixLen
+
+            // Find word boundaries within the full string
+            let wordRange = fullString.rangeOfCharacter(from: .whitespaces, options: [], range: NSRange(location: characterIndex, length: fullString.length - characterIndex))
+            let wordStart: Int = {
+                let beforeRange = fullString.rangeOfCharacter(from: .whitespaces, options: .backwards, range: NSRange(location: 0, length: characterIndex))
+                return beforeRange.location == NSNotFound ? textStart : beforeRange.location + beforeRange.length
+            }()
+            let wordEnd: Int = wordRange.location == NSNotFound ? verseRange.location + verseRange.length : wordRange.location
+
+            guard wordEnd > wordStart else { return }
+            let absoluteWordRange = NSRange(location: wordStart, length: wordEnd - wordStart)
+
+            // Clamp to verse text boundary (excluding number prefix)
+            let clampedStart = max(absoluteWordRange.location, textStart)
+            let clampedEnd = min(absoluteWordRange.location + absoluteWordRange.length, verseRange.location + verseRange.length)
+            guard clampedEnd > clampedStart else { return }
+
+            let selectedWord = fullString.substring(with: NSRange(location: clampedStart, length: clampedEnd - clampedStart))
+
+            // Convert to verse-text-relative range (excluding number prefix)
+            let relativeLocation = clampedStart - textStart
+            let relativeRange = NSRange(location: relativeLocation, length: clampedEnd - clampedStart)
+
+            guard relativeRange.location >= 0,
+                  relativeRange.location + relativeRange.length <= verse.text.count else { return }
+
+            // Visually highlight the word in the text view
+            isHandlingGesture = true
+            textView.selectedRange = NSRange(location: clampedStart, length: clampedEnd - clampedStart)
+            isHandlingGesture = false
+
+            parent.onTextSelected(verse, relativeRange, selectedWord)
+        }
+
+        // MARK: - Native selection delegate (still needed for drag-select)
+
         func textViewDidChangeSelection(_ textView: UITextView) {
+            guard !isHandlingGesture else { return }
+
             let selectedRange = textView.selectedRange
-            
-            guard selectedRange.length > 0,
-                  let selectedText = textView.text(in: textView.selectedTextRange!) else {
-                return
-            }
-            
-            debugLog("interaction", "📌 Text selected: range=\(selectedRange), length=\(selectedRange.length), text='\(selectedText)'")
-            
-            // Cancel previous debounce
-            selectionDebounceTask?.cancel()
-            
-            // Debounce selection to avoid excessive callbacks
-            selectionDebounceTask = Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                
-                try? await Task.sleep(for: .milliseconds(150))
-                guard !Task.isCancelled else { return }
-                
-                // Find which verse this selection belongs to
-                if let verse = self.findVerseForSelection(selectedRange, in: textView) {
-                    debugLog("interaction", "✅ Found verse \(verse.number) for selection")
-                    
-                    // Calculate the offset within the verse text
-                    let verseOffset = self.calculateVerseOffset(for: verse, selectedRange: selectedRange, in: textView)
-                    debugLog("interaction", "📍 Verse offset calculated: \(verseOffset)")
-                    
-                    // Create adjusted range relative to verse text
-                    let adjustedRange = NSRange(location: verseOffset, length: selectedRange.length)
-                    
-                    self.parent.onTextSelected(verse, adjustedRange, selectedText)
-                } else {
-                    debugLog("interaction", "❌ Could not find verse for selection at range \(selectedRange)")
-                }
-            }
+
+            guard selectedRange.length > 0 else { return }
+
+            // Get selected text
+            let nsString = textView.attributedText.string as NSString
+            guard selectedRange.location + selectedRange.length <= nsString.length else { return }
+
+            let selectedText = nsString.substring(with: selectedRange)
+
+            // Find which verse this selection STARTS in
+            guard let verse = findVerse(for: selectedRange, in: textView.attributedText) else { return }
+
+            // Calculate range relative to verse text (excluding number prefix)
+            let verseRange = calculateVerseRange(for: verse, in: textView.attributedText.string)
+            let prefixLen = versePrefixLength(for: verse)
+            let textStart = verseRange.location + prefixLen
+
+            let verseTextEnd = verseRange.location + verseRange.length
+            let selectionEndPosition = selectedRange.location + selectedRange.length
+            let effectiveSelectionEnd = min(selectionEndPosition, verseTextEnd)
+            let effectiveStart = max(selectedRange.location, textStart)
+            guard effectiveSelectionEnd > effectiveStart else { return }
+            let effectiveSelectionLength = effectiveSelectionEnd - effectiveStart
+
+            let relativeLocation = max(0, effectiveStart - textStart)
+            let verseTextLength = verseRange.length - prefixLen
+            let relativeLength = max(0, min(effectiveSelectionLength, verseTextLength - relativeLocation))
+
+            let relativeRange = NSRange(location: relativeLocation, length: relativeLength)
+
+            guard relativeRange.length > 0,
+                  relativeRange.location >= 0,
+                  relativeRange.location + relativeRange.length <= verse.text.count else { return }
+
+            parent.onTextSelected(verse, relativeRange, selectedText)
         }
         
-        /// Find which verse contains the selected range
-        private func findVerseForSelection(_ range: NSRange, in textView: UITextView) -> Verse? {
+        private func findVerse(for range: NSRange, in attributedText: NSAttributedString) -> Verse? {
             var currentPosition = 0
             
             for verse in verses {
-                // Calculate total length for this verse (number + space + text + newline)
-                let verseNumberLength = "\(verse.number) ".count
-                let verseTextLength = verse.text.count
-                let totalVerseLength = verseNumberLength + verseTextLength + 1 // +1 for newline
+                let verseString = "\(verse.number) \(verse.text)"
+                let verseLength = verseString.count
                 
-                let verseRange = NSRange(location: currentPosition, length: totalVerseLength)
+                let verseRange = NSRange(location: currentPosition, length: verseLength)
                 
-                debugLog("interaction", "🔍 Checking verse \(verse.number): range=\(verseRange), selection=\(range)")
-                
-                // Check if selection starts within this verse's range
-                if range.location >= currentPosition && range.location < currentPosition + totalVerseLength {
-                    debugLog("interaction", "✅ Selection belongs to verse \(verse.number)")
-                    
-                    // CRITICAL: Check if verse has any interlinear words loaded
-                    debugLog("interaction", "📚 Verse \(verse.number) has \(verse.words.count) interlinear words")
-                    if verse.words.isEmpty {
-                        debugLog("interaction", "⚠️ WARNING: No interlinear data for verse \(verse.number) - data may not be seeded!")
-                    } else {
-                        debugLog("interaction", "✨ Interlinear words available:")
-                        for word in verse.words.prefix(3) {
-                            debugLog("interaction", "  - \(word.originalText) (\(word.transliteration)) @ pos \(word.startPosition)-\(word.endPosition)")
-                        }
-                    }
-                    
+                // Check if selection STARTS within this verse
+                if range.location >= verseRange.location &&
+                   range.location < verseRange.location + verseRange.length {
                     return verse
                 }
                 
-                currentPosition += totalVerseLength
+                currentPosition += verseLength + 1 // +1 for newline
             }
             
-            return nil
+            // If we couldn't find the verse, return the last one (safety fallback)
+            return verses.last
         }
         
-        /// Calculate the offset within the verse text (excluding verse number)
-        private func calculateVerseOffset(for verse: Verse, selectedRange: NSRange, in textView: UITextView) -> Int {
+        private func calculateVerseRange(for verse: Verse, in fullText: String) -> NSRange {
             var currentPosition = 0
             
             for v in verses {
+                let verseString = "\(v.number) \(v.text)"
+                let verseLength = verseString.count
+                
                 if v.id == verse.id {
-                    // Found our verse - calculate offset
-                    let verseNumberLength = "\(v.number) ".count
-                    let offsetWithinVerse = selectedRange.location - currentPosition - verseNumberLength
-                    
-                    debugLog("interaction", "🧮 Offset calculation: currentPos=\(currentPosition), verseNumLen=\(verseNumberLength), selection=\(selectedRange.location), offset=\(offsetWithinVerse)")
-                    
-                    return max(0, offsetWithinVerse)
+                    return NSRange(location: currentPosition, length: verseLength)
                 }
                 
-                let verseNumberLength = "\(v.number) ".count
-                let verseTextLength = v.text.count
-                currentPosition += verseNumberLength + verseTextLength + 1
+                currentPosition += verseLength + 1 // +1 for newline
             }
             
-            return 0
+            return NSRange(location: 0, length: 0)
         }
     }
 }
